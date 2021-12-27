@@ -40,7 +40,9 @@ def draw_hsv(flow):
     return bgr
 
 
-def draw_contour_3(img,flow, step=16):
+
+
+def draw_contour_masked(img,flow, step=16):
     try:
         h, w = flow.shape[:2]
         fx, fy = flow[:,:,0], flow[:,:,1]
@@ -74,7 +76,7 @@ def draw_contour_3(img,flow, step=16):
 
         # draw white contour on black background as mask
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.drawContours(mask, [big_contour], 0, (255, 255, 255), cv2.FILLED)
+        # cv2.drawContours(mask, [big_contour], 0, (255, 255, 255), cv2.FILLED)
         
         hull = cv2.convexHull(big_contour)
         area = cv2.contourArea(hull)
@@ -87,19 +89,22 @@ def draw_contour_3(img,flow, step=16):
             if area < 0.5*convex_size_q.calc_mean():
                 hull = convex_size_q.last_convex()
                 
-        cv2.drawContours(img, [hull], -1, (0, 255, 255), 2)
+        cv2.drawContours(mask, [hull], -1, (255, 255, 255), cv2.FILLED)
         
         # invert mask so shapes are white on black background
         mask_inv = 255 - mask
-
+        
         # create new (blue) background
         bckgnd = np.full_like(img, 255)
 
         # apply mask to image
         image_masked = cv2.bitwise_and(img, img, mask=mask)
+        
+        bckgnd = 255 - bckgnd
 
         # apply inverse mask to background
         bckgnd_masked = cv2.bitwise_and(bckgnd, bckgnd, mask=mask_inv)
+        
 
         # add together
         result = cv2.add(image_masked, bckgnd_masked)
@@ -183,7 +188,7 @@ while True:
 
     cv2.imshow('flow', draw_flow(gray, flow))
     # cv2.imshow('flow HSV', draw_hsv(flow))
-    cv2.imshow('contour', draw_contour_3(gray, flow))
+    cv2.imshow('contour', draw_contour_masked(gray, flow))
 
     key = cv2.waitKey(5)
     if key == ord('q'):
