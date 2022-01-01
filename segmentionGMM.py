@@ -4,7 +4,7 @@ import cv2
 from sklearn.mixture import GaussianMixture
 import time
 
-image = cv2.imread('table.jpeg')
+image = cv2.imread('handTest2.jpeg')
 originalShape = image.shape
 
 imageLAB = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
@@ -25,9 +25,9 @@ B = np.array(image[:, :, 0]).flatten()
 
 # data = np.array([R, G, B, x, y]).transpose()
 # data = np.array([R, G, B]).transpose()
-data = np.array([L ,a, b]).transpose()
+data = np.array([a, b]).transpose()
 
-n_compononts = 4
+n_compononts = 2
 classif = GaussianMixture(n_components=n_compononts)
 classif.fit(data)
 GMM_Labels = classif.predict(data)

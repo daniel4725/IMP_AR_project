@@ -4,6 +4,7 @@ import cv2
 from sklearn.mixture import GaussianMixture
 import time
 import pickle   # pip install pickle-mixin
+import keras
 
 # load the model from disk
 filename = 'finalized_model.sav'
@@ -13,11 +14,15 @@ loaded_model = pickle.load(open(filename, 'rb'))
 filename = 'hand_gmm_model.sav'
 gmm_model = pickle.load(open(filename, 'rb'))
 
+filename = 'ML\keras_fingers_model'
+keras_model = keras.models.load_model(filename)
+print(keras_model.summary())
+
 
 img_size = 128
-# cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0)
 
-cap = cv2.VideoCapture('http://192.168.0.169:4747/mjpegfeed?640x480')
+# cap = cv2.VideoCapture('http://192.168.0.169:4747/mjpegfeed?640x480')
 
 # cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)
 # cap.set(CV_CAP_PROP_BUFFERSIZE, 3)
@@ -47,9 +52,13 @@ while True:
     
     gray_smaller = cv2.resize(segmented2_norm, (img_size,img_size)).flatten()
         
-    gray_smaller = np.reshape(gray_smaller,(1,img_size*img_size))
+    gray_smaller_1D = np.reshape(gray_smaller,(1,img_size*img_size))
     
-    y_pred=loaded_model.predict(gray_smaller)
+    gray_smaller_2D = np.reshape(gray_smaller,(1,img_size,img_size))
+    
+    # y_pred=loaded_model.predict(gray_smaller_1D) # sklearn model
+    y_pred_array = keras_model.predict(gray_smaller_2D)
+    y_pred = np.argmax(y_pred_array, axis=1)
     
     predict = str(y_pred)
     
