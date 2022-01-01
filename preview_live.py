@@ -18,6 +18,44 @@ filename = 'ML\keras_fingers_model'
 keras_model = keras.models.load_model(filename)
 print(keras_model.summary())
 
+def count_finger(grey):
+    try:
+        # applying gaussian blur
+        blurred = cv2.GaussianBlur(grey, (5, 5), cv2.BORDER_DEFAULT)
+
+        contours, hierarchy = cv2.findContours(blurred, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cntsMax = max(contours, key=lambda x: cv2.contourArea(x))
+        # largeContour = np.vstack([cntsMax[-1], cntsMax[-2]])
+        cv2.drawContours(grey, cntsMax, -1, (255, 255, 0), 2)
+        hull1 = cv2.convexHull(cntsMax)
+        cv2.drawContours(grey, [hull1], -1, (0, 255, 255), 2)
+        areahull = cv2.contourArea(hull1)
+        areacnt = cv2.contourArea(cntsMax)
+        arearatio = ((areahull - areacnt) / areacnt) * 100
+        hull = cv2.convexHull(cntsMax, returnPoints=False)
+        defects = cv2.convexityDefects(cntsMax, hull)
+        if defects is not None:
+            cnt = 0
+            for i in range(defects.shape[0]):  # calculate the angle
+                s, e, f, d = defects[i][0]
+                start = tuple(cntsMax[s][0])
+                end = tuple(cntsMax[e][0])
+                far = tuple(cntsMax[f][0])
+                a = np.sqrt((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2)
+                b = np.sqrt((far[0] - start[0]) ** 2 + (far[1] - start[1]) ** 2)
+                c = np.sqrt((end[0] - far[0]) ** 2 + (end[1] - far[1]) ** 2)
+                angle = np.arccos((b ** 2 + c ** 2 - a ** 2) / (2 * b * c))  # cosine theorem
+                if angle <= np.pi / 2:  # angle less than 90 degree, treat as fingers
+                    cnt += 1
+                    cv2.circle(grey, far, 4, [0, 0, 255], -1)
+            if cnt > 0:
+                cnt = cnt + 1
+            if cnt == 0 and arearatio >= 12:
+                cnt = cnt + 1
+            cv2.putText(grey, str(cnt), (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    except:
+        return grey
+    return grey
 
 img_size = 128
 cap = cv2.VideoCapture(0)
@@ -56,15 +94,17 @@ while True:
     
     gray_smaller_2D = np.reshape(gray_smaller,(1,img_size,img_size))
     
-    # y_pred=loaded_model.predict(gray_smaller_1D) # sklearn model
-    y_pred_array = keras_model.predict(gray_smaller_2D)
-    y_pred = np.argmax(y_pred_array, axis=1)
+    segmented2_norm = count_finger(segmented2_norm)
     
-    predict = str(y_pred)
+    # y_pred=loaded_model.predict(gray_smaller_1D) # sklearn model
+    # y_pred_array = keras_model.predict(gray_smaller_2D)
+    # y_pred = np.argmax(y_pred_array, axis=1)
+    
+    # predict = str(y_pred)
     
     font = cv2.FONT_HERSHEY_SIMPLEX
     
-    cv2.putText(segmented2_norm, predict, (7, 70), font, 3, (100, 255, 0), 3, cv2.LINE_AA)
+    # cv2.putText(segmented2_norm, predict, (7, 70), font, 3, (100, 255, 0), 3, cv2.LINE_AA)
     
     # gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
