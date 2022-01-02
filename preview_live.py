@@ -5,18 +5,19 @@ from sklearn.mixture import GaussianMixture
 import time
 import pickle   # pip install pickle-mixin
 import keras
+from Calibration import Calibration
 
-# load the model from disk
-filename = 'finalized_model.sav'
-loaded_model = pickle.load(open(filename, 'rb'))
+# # load the model from disk
+# filename = 'finalized_model.sav'
+# loaded_model = pickle.load(open(filename, 'rb'))
 
-# load the model from disk
-filename = 'hand_gmm_model.sav'
-gmm_model = pickle.load(open(filename, 'rb'))
+# # load the model from disk
+# filename = 'hand_gmm_model.sav'
+# gmm_model = pickle.load(open(filename, 'rb'))
 
-filename = 'ML\keras_fingers_model'
-keras_model = keras.models.load_model(filename)
-print(keras_model.summary())
+# filename = 'ML\keras_fingers_model'
+# keras_model = keras.models.load_model(filename)
+# print(keras_model.summary())
 
 def count_finger(grey):
     try:
@@ -57,6 +58,10 @@ def count_finger(grey):
         return grey
     return grey
 
+cal = Calibration()
+cal.capture_hand()
+cal.gmm_train()
+
 img_size = 128
 cap = cv2.VideoCapture(0)
 
@@ -82,7 +87,7 @@ while True:
     b2 = np.array(image2LAB[:, :, 2]).flatten()
 
     data2 = np.array([a2, b2]).transpose()
-    GMM_Labels2 = gmm_model.predict(data2)
+    GMM_Labels2 = cal.GMM_Model.predict(data2)
     
     segmented2 = np.array(GMM_Labels2).reshape(image2Shape[0], image2Shape[1])
     
