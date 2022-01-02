@@ -94,7 +94,7 @@ while True:
     
     gray_smaller_2D = np.reshape(gray_smaller,(1,img_size,img_size))
     
-    segmented2_norm = count_finger(segmented2_norm)
+    
     
     # y_pred=loaded_model.predict(gray_smaller_1D) # sklearn model
     # y_pred_array = keras_model.predict(gray_smaller_2D)
@@ -107,6 +107,20 @@ while True:
     # cv2.putText(segmented2_norm, predict, (7, 70), font, 3, (100, 255, 0), 3, cv2.LINE_AA)
     
     # gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    
+    gray = segmented2_norm
+    
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS,(5,5))
+    H = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel, iterations=3)
+    V = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel, iterations=3)
+
+    gray = cv2.bitwise_and(H, V)
+    
+    segmented2_norm = count_finger(gray)
+    
+    segmented2_norm = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    
+    
 
     cv2.imshow('flow', segmented2_norm)
     
