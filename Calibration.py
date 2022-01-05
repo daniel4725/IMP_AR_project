@@ -6,7 +6,6 @@ import time
 import pickle
 import matplotlib.pyplot as plt
 
-
 class Calibration:
     def __init__(self):
         self.flag = 0
@@ -24,13 +23,23 @@ class Calibration:
         self.flag += 1
 
     def capture_hand(self):
-        cap = cv2.VideoCapture(0)
-        suc, prev = cap.read()
-        prev = cv2.flip(prev, 1)
-        cv2.rectangle(prev, (400, 140), (620, 360), (0, 255, 0), 0)
-        cropPrev = prev[141:359, 401:619]
-        prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
+        handExample = cv2.imread('handExample.jpeg')
+        cap = cv2.VideoCapture(1)
+        while True:
+            suc, prev = cap.read()
+            if suc == True:
+                break
+        prev = prev[:, 0:int(prev.shape[1]/2), :]  # left image
+        # prev = cv2.flip(prev, 1)
+        roi = [140, 360, 400, 620]  # [y_start, y_end, x_start, x_end]
+        cv2.rectangle(prev, (roi[2], roi[0]), (roi[3], roi[1]), (0, 255, 0), 0)  # (top left corner),(bottom right corner)
+        cropPrev = prev[roi[0]+1:roi[1]-1, roi[2]+1:roi[3]-1]
         shape = cropPrev.shape
+        handExample = cv2.resize(handExample, (int(shape[1]/2), shape[0]))
+        handExampleGray = cv2.cvtColor(handExample, cv2.COLOR_BGR2GRAY)
+        ret, mask = cv2.threshold(handExampleGray, 10, 255, cv2.THRESH_BINARY)
+        mask = np.array(np.hstack([mask, mask]))
+        prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
         numPixels = shape[0]*shape[1]
         tol = numPixels/2
         change = 0
@@ -38,10 +47,14 @@ class Calibration:
         t1 = threading.Thread(target=self.timer_sec)
         while cap.isOpened():
             suc, img = cap.read()
-            img = cv2.flip(img, 1)
-            cv2.rectangle(img, (400, 140), (620, 360), (0, 255, 0), 0)
-            cropImg = img[141:359, 401:619]
-            cv2.imshow('image', img)
+            img = img[:, 0:int(img.shape[1] / 2), :]  # left image
+            # img = cv2.flip(img, 1)
+            imgView = np.array(img, copy=True)
+            cv2.rectangle(imgView, (roi[2], roi[0]), (roi[3], roi[1]), (0, 255, 0), 0)
+            cropImg = img[roi[0]+1:roi[1]-1, roi[2]+1:roi[3]-1]
+            cropImgView = imgView[roi[0]+1:roi[1]-1, roi[2]+1:roi[3]-1]
+            cropImgView = cv2.bitwise_and(cropImgView, cropImgView, mask=mask)
+            imgView[roi[0]+1:roi[1]-1, roi[2]+1:roi[3]-1] = cropImgView
             imgGray = cv2.cvtColor(cropImg, cv2.COLOR_BGR2GRAY)
             subImg = imgGray - prevGray
             y = subImg.reshape(1, -1)
@@ -51,20 +64,21 @@ class Calibration:
             if startTimer == 1:
                 t1.start()
             if self.flag == 1:
-                cv2.putText(img, '3', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                cv2.imshow('image', img)
+                cv2.putText(imgView, '3', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.imshow('image', imgView)
             if self.flag == 2:
-                cv2.putText(img, '2', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                cv2.imshow('image', img)
+                cv2.putText(imgView, '2', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.imshow('image', imgView)
             if self.flag == 3:
-                cv2.putText(img, '1', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                cv2.imshow('image', img)
+                cv2.putText(imgView, '1', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.imshow('image', imgView)
             if self.flag == 4:
-                cv2.putText(img, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+                cv2.putText(imgView, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                 self.GMM_Image = cropImg
-                cv2.imshow('image', img)
+                cv2.imshow('image', imgView)
                 cv2.waitKey(5)
                 break
+            cv2.imshow('image', imgView)
             key = cv2.waitKey(5)
             if key == ord('q'):
                 break
@@ -85,6 +99,11 @@ class Calibration:
         self.GMM_Model.fit(data)
         GMM_Labels = self.GMM_Model.predict(data)
 
+        if GMM_Labels[0] == 1:
+            GMM_Labels = np.array(GMM_Labels, dtype=bool)
+            GMM_Labels = np.invert(GMM_Labels)
+            GMM_Labels = np.array(GMM_Labels, dtype=int)
+
         # save the model to disk
         filename = 'hand_gmm_model.sav'
         pickle.dump(self.GMM_Model, open(filename, 'wb'))
@@ -103,6 +122,16 @@ class Calibration:
 
 
 if __name__ == "__main__":
+    # all_camera_idx_available = []
+    #
+    # for camera_idx in range(10):
+    #     cap = cv2.VideoCapture(camera_idx)
+    #     if cap.isOpened():
+    #         print(f'Camera index available: {camera_idx}')
+    #         all_camera_idx_available.append(camera_idx)
+    #         cap.release()
+
+
     cal = Calibration()
     cal.capture_hand()
     cal.gmm_train()
