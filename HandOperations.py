@@ -34,6 +34,8 @@ class HandOperations:
         cv2.drawContours(mask, self.maxcontour, -1, (255, 255, 255), 1)
         cv2.fillPoly(mask, pts=[self.maxcontour], color=(255, 255, 255))
         self.mask = mask[:, :, 0]
+        
+        return np.array(self.mask, copy=True)
 
     def finger_count(self):
         hull = cv2.convexHull(self.maxcontour)

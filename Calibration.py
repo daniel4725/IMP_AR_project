@@ -5,7 +5,7 @@ from sklearn.mixture import GaussianMixture
 import time
 import pickle
 import matplotlib.pyplot as plt
-
+import matplotlib
 class Calibration:
     def __init__(self):
         self.flag = 0
@@ -24,7 +24,7 @@ class Calibration:
 
     def capture_hand(self):
         handExample = cv2.imread('handExample.jpeg')
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(0)
         while True:
             suc, prev = cap.read()
             if suc == True:
@@ -41,7 +41,7 @@ class Calibration:
         mask = np.array(np.hstack([mask, mask]))
         prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
         numPixels = shape[0]*shape[1]
-        tol = numPixels/2
+        tol = numPixels/10
         change = 0
         startTimer = 0
         t1 = threading.Thread(target=self.timer_sec)
@@ -59,6 +59,8 @@ class Calibration:
             subImg = imgGray - prevGray
             y = subImg.reshape(1, -1)
             change = (y > 127).sum()
+            print(change)
+            print(tol)
             if change >= tol:
                 startTimer += 1
             if startTimer == 1:
@@ -135,4 +137,6 @@ if __name__ == "__main__":
     cal = Calibration()
     cal.capture_hand()
     cal.gmm_train()
+    
+    
 
