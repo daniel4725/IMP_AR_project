@@ -14,7 +14,7 @@ while True:
     clientsocket, address = s.accept()
     print(f"Connection from {address} has been established.")
 
-    d = {1:"hi",3 : "test", 2: "there"}
+    d = {1:"hi",3 : "test" 2: "there"}
     msg = pickle.dumps(d)
     msg = bytes(f"{len(msg):<{HEADERSIZE}}", 'utf-8')+msg
     print(msg)
