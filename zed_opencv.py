@@ -17,7 +17,7 @@ def main() :
     if len(sys.argv) >= 2 :
         input_type.set_from_svo_file(sys.argv[1])
     init = sl.InitParameters(input_t=input_type)
-    init.camera_resolution = sl.RESOLUTION.HD1080
+    init.camera_resolution = sl.RESOLUTION.HD720
     init.depth_mode = sl.DEPTH_MODE.PERFORMANCE
     init.coordinate_units = sl.UNIT.MILLIMETER
 
@@ -44,40 +44,59 @@ def main() :
     point_cloud = sl.Mat()
 
     key = ' '
-            
+    
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    masked_out = cv2.VideoWriter('masked_video.mp4', fourcc, 5.0, (image_size.width*2,image_size.height))
+    regular_out = cv2.VideoWriter('regular_video.mp4', fourcc, 5.0, (image_size.width*2,image_size.height))
+
+                     
     while key != 113 :
         err = zed.grab(runtime)
         if err == sl.ERROR_CODE.SUCCESS :
             # Retrieve the left image, depth image in the half-resolution
             zed.retrieve_image(image_zed_left, sl.VIEW.LEFT, sl.MEM.CPU, image_size)
             zed.retrieve_image(image_zed_right, sl.VIEW.RIGHT, sl.MEM.CPU, image_size)
-            zed.retrieve_image(depth_image_zed, sl.VIEW.DEPTH, sl.MEM.CPU, image_size)
-            # Retrieve the RGBA point cloud in half resolution
-            zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA, sl.MEM.CPU, image_size)
 
             # To recover data from sl.Mat to use it with opencv, use the get_data() method
             # It returns a numpy array that can be used as a matrix with opencv
             image_ocv_left = image_zed_left.get_data()
             image_ocv_right = image_zed_right.get_data()
             
-            img = image_ocv_left[:, 0:int(image_ocv_left.shape[1] / 2), :]  # left image
-            hand = HandOperations(image=img)
-            masked_image = hand.get_hand_mask(gmm_model=cal.GMM_Model)
-            depth_image_ocv = depth_image_zed.get_data()
+            # img = image_ocv_left[:, 0:int(image_ocv_left.shape[1] / 2), :]  # left image
+            hand_left = HandOperations(image=image_ocv_left)
+            masked_image_left = hand_left.get_hand_mask(gmm_model=load_model)
+            hand_right = HandOperations(image=image_ocv_right)
+            masked_image_right = hand_right.get_hand_mask(gmm_model=load_model)
 
-            cv2.imshow("Image", masked_image)
-            # cv2.imshow("Depth", depth_image_ocv)
+            cv2.imshow("Image", image_ocv_left)
+                   
+            gray = cv2.hconcat([masked_image_left,masked_image_right])
+            gray = np.uint8(gray)
+            masked_out.write(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
+            
+            gray_1 = cv2.cvtColor(image_ocv_left, cv2.COLOR_BGR2GRAY)
+            gray_2 = cv2.cvtColor(image_ocv_right, cv2.COLOR_BGR2GRAY)        
+            gray = cv2.hconcat([gray_1,gray_2])
+            regular_out.write(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
 
-            key = cv2.waitKey(10)
+            key = cv2.waitKey(20)
+            if key == 27: # exit on ESC
+                break
 
+    
+    masked_out.release()
+    regular_out.release()
     cv2.destroyAllWindows()
     zed.close()
 
     print("\nFINISH")
 
 if __name__ == "__main__":
-    cal = Calibration()
-    cal.capture_hand()
-    cal.gmm_train()
+    # cal = Calibration()
+    # cal.capture_hand()
+    # cal.gmm_train()
+    import pickle
     
+    file_name = 'hand_gmm_model.sav'
+    load_model = pickle.load(open( file_name, "rb" ))
     main()

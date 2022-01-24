@@ -41,7 +41,7 @@ class Calibration:
         mask = np.array(np.hstack([mask, mask]))
         prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
         numPixels = shape[0]*shape[1]
-        tol = numPixels/10
+        tol = numPixels/2
         change = 0
         startTimer = 0
         t1 = threading.Thread(target=self.timer_sec)
@@ -58,7 +58,7 @@ class Calibration:
             imgGray = cv2.cvtColor(cropImg, cv2.COLOR_BGR2GRAY)
             subImg = imgGray - prevGray
             y = subImg.reshape(1, -1)
-            change = (y > 127).sum()
+            change = (y > 200).sum()
             print(change)
             print(tol)
             if change >= tol:

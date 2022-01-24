@@ -14,25 +14,29 @@ class HandOperations:
 
     def get_hand_mask(self, gmm_model):
         imagedim = self.image.shape
+        try:
 
-        imageLAB = cv2.cvtColor(self.image, cv2.COLOR_BGR2LAB)
+            imageLAB = cv2.cvtColor(self.image, cv2.COLOR_BGR2LAB)
 
-        L = np.array(imageLAB[:, :, 0]).flatten()
-        a = np.array(imageLAB[:, :, 1]).flatten()
-        b = np.array(imageLAB[:, :, 2]).flatten()
+            L = np.array(imageLAB[:, :, 0]).flatten()
+            a = np.array(imageLAB[:, :, 1]).flatten()
+            b = np.array(imageLAB[:, :, 2]).flatten()
 
-        data = np.array([a, b]).transpose()
+            data = np.array([a, b]).transpose()
 
-        predicted = gmm_model.predict(data)
-        imageseg = np.array(predicted).reshape(imagedim[0], imagedim[1])
-        imageseg = ImageOperations.morph_open(imageseg)
-        imagenorm = cv2.normalize(imageseg, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        blurred = cv2.GaussianBlur(imagenorm, (5, 5), cv2.BORDER_DEFAULT)
-        contours, hierarchy = cv2.findContours(blurred, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        self.maxcontour = max(contours, key=lambda x: cv2.contourArea(x))
-        mask = np.zeros(imagedim)
-        cv2.drawContours(mask, self.maxcontour, -1, (255, 255, 255), 1)
-        cv2.fillPoly(mask, pts=[self.maxcontour], color=(255, 255, 255))
+            predicted = gmm_model.predict(data)
+            imageseg = np.array(predicted).reshape(imagedim[0], imagedim[1])
+            imageseg = ImageOperations.morph_open(imageseg)
+            imagenorm = cv2.normalize(imageseg, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+            blurred = cv2.GaussianBlur(imagenorm, (5, 5), cv2.BORDER_DEFAULT)
+            contours, hierarchy = cv2.findContours(blurred, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            self.maxcontour = max(contours, key=lambda x: cv2.contourArea(x))
+            mask = np.zeros(imagedim)
+            cv2.drawContours(mask, self.maxcontour, -1, (255, 255, 255), 1)
+            cv2.fillPoly(mask, pts=[self.maxcontour], color=(255, 255, 255))
+        
+        except:
+            mask = np.zeros(imagedim)
         self.mask = mask[:, :, 0]
         
         return np.array(self.mask, copy=True)
