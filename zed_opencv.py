@@ -20,6 +20,7 @@ def main() :
     init.camera_resolution = sl.RESOLUTION.HD720
     init.depth_mode = sl.DEPTH_MODE.PERFORMANCE
     init.coordinate_units = sl.UNIT.MILLIMETER
+    init.camera_fps = 15
 
     # Open the camera
     err = zed.open(init)
@@ -47,7 +48,8 @@ def main() :
     
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     masked_out = cv2.VideoWriter('masked_video.mp4', fourcc, 5.0, (image_size.width*2,image_size.height))
-    regular_out = cv2.VideoWriter('regular_video.mp4', fourcc, 5.0, (image_size.width*2,image_size.height))
+    regular_left_out = cv2.VideoWriter('regular_video_left.mp4', fourcc, 5.0, (image_size.width,image_size.height))
+    regular_right_out = cv2.VideoWriter('regular_video_right.mp4', fourcc, 5.0, (image_size.width,image_size.height))
 
                      
     while key != 113 :
@@ -68,16 +70,19 @@ def main() :
             hand_right = HandOperations(image=image_ocv_right)
             masked_image_right = hand_right.get_hand_mask(gmm_model=load_model)
 
-            cv2.imshow("Image", image_ocv_left)
+            cv2.imshow("Image", masked_image_left)
                    
             gray = cv2.hconcat([masked_image_left,masked_image_right])
             gray = np.uint8(gray)
             masked_out.write(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
             
-            gray_1 = cv2.cvtColor(image_ocv_left, cv2.COLOR_BGR2GRAY)
-            gray_2 = cv2.cvtColor(image_ocv_right, cv2.COLOR_BGR2GRAY)        
-            gray = cv2.hconcat([gray_1,gray_2])
-            regular_out.write(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
+            # gray_1 = cv2.cvtColor(image_ocv_left, cv2.COLOR_BGR2GRAY)
+            # gray_2 = cv2.cvtColor(image_ocv_right, cv2.COLOR_BGR2GRAY)        
+            # gray = cv2.hconcat([gray_1,gray_2])
+            image_ocv_left = image_ocv_left[:,:,0:3]
+            image_ocv_right = image_ocv_right[:,:,0:3]
+            regular_left_out.write(image_ocv_left)
+            regular_right_out.write(image_ocv_right)
 
             key = cv2.waitKey(20)
             if key == 27: # exit on ESC
@@ -85,7 +90,8 @@ def main() :
 
     
     masked_out.release()
-    regular_out.release()
+    regular_left_out.release()
+    regular_right_out.release()
     cv2.destroyAllWindows()
     zed.close()
 
