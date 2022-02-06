@@ -39,6 +39,9 @@ def send():
 def receive():
     cap_receive = cv2.VideoCapture('udpsrc port=5005 caps = "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96" ! rtph264depay ! decodebin ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
 
+    out_send = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=500 speed-preset=superfast ! rtph264pay ! udpsink host=192.168.0.169 port=5005',cv2.CAP_GSTREAMER,0, 20, (1280,360), True)
+
+    
     if not cap_receive.isOpened():
         print('VideoCapture not opened')
         exit(0)
@@ -49,6 +52,8 @@ def receive():
         if not ret:
             print('empty frame')
             break
+        
+        out_send.write(frame)
 
         cv2.imshow('receive', frame)
         if cv2.waitKey(1)&0xFF == ord('q'):
@@ -57,11 +62,11 @@ def receive():
     #cap_receive.release()
 
 if __name__ == '__main__':
-    s = Process(target=send)
+    # s = Process(target=send)
     r = Process(target=receive)
-    s.start()
+    # s.start()
     r.start()
-    s.join()
+    # s.join()
     r.join()
 
     cv2.destroyAllWindows()
