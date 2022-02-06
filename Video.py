@@ -33,7 +33,7 @@ class Video_operations:
         cap = cv2.VideoCapture(source)
         fps = cap.get(cv2.CAP_PROP_FPS)
         self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(destination, self._fourcc, 20.0, (640,480))
+        out = cv2.VideoWriter(destination, -1, 20.0, (640,480))
         # get total number of frames
         totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
@@ -42,10 +42,12 @@ class Video_operations:
             suc, img = cap.read()
                
             func_img = func(img)
-            # dim = (480, 640)
-            # func_img_resized = cv2.resize(func_img, dim, interpolation = cv2.INTER_AREA)
-            out.write(func_img)
+            dim = (640, 480)
+            func_img_resized = cv2.resize(func_img, dim, interpolation = cv2.INTER_AREA)
+            imagenorm = cv2.normalize(func_img_resized, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+            out.write(imagenorm)
             cv2.imshow('Video', func_img)
+            cv2.imshow('Original', img)
 
             key = cv2.waitKey(100)
             if key == ord('q'):
@@ -72,8 +74,8 @@ if __name__ == "__main__":
     def get_hand_mask(image):
         hand = HandOperations(image=image)
         masked_image = hand.get_hand_mask(cal.get_segmentation(image))
-        count_image = hand.finger_count(masked_image)
-        return count_image
+        # count_image = hand.finger_count(masked_image)
+        return masked_image
     
-    video.save_and_preview_video_from_other_video(get_hand_mask, "count_fingers.mp4", "test.mp4")
+    video.save_and_preview_video_from_other_video(get_hand_mask, "regular_video_left.mp4", "masked_regular_video_left.mp4")
         
