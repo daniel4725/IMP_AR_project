@@ -10,6 +10,7 @@ import numpy as np
 import cv2 
 from multiprocessing import Process
 
+
 def send():
     # cap_send = cv2.VideoCapture('videotestsrc ! video/x-raw,framerate=20/1 ! videoscale ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
     cap_send = cv2.VideoCapture("regular_video.mp4")
