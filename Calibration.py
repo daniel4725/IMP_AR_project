@@ -6,10 +6,9 @@ import time
 import pickle
 import matplotlib.pyplot as plt
 from scipy import ndimage
-
-
 from functools import wraps
-from time import time
+
+
 def measure(func):
     @wraps(func)
     def _time_it(*args, **kwargs):
@@ -20,7 +19,6 @@ def measure(func):
             end_ = int(round(time() * 1000)) - start
             print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
     return _time_it
-
 
 
 class Calibration:
@@ -50,7 +48,7 @@ class Calibration:
         time.sleep(1)
         self.flag += 1
 
-    def capture_hand(self, video_num = 1,stereo: bool = True, print_roi_match: bool = False):
+    def capture_hand(self, video_num=1, stereo: bool = True, print_roi_match: bool = False):
         
         cap = cv2.VideoCapture(video_num)
         while True:
@@ -59,7 +57,7 @@ class Calibration:
                 break
         if (stereo):
             prev = prev[:, 0:int(prev.shape[1]/2), :]  # left image
-        # prev = cv2.flip(prev, 1)
+        prev = cv2.flip(prev, 1)
         
         # roi = [100, 420, 300, 620]  # [y_start, y_end, x_start, x_end]
 
@@ -77,7 +75,7 @@ class Calibration:
             suc, img = cap.read()
             if (stereo):
                 img = img[:, 0:int(img.shape[1] / 2), :]  # left image
-            # img = cv2.flip(img, 1)
+            img = cv2.flip(img, 1)
             imgView = np.array(img, copy=True)
             # cv2.rectangle(imgView, (roi[2], roi[0]), (roi[3], roi[1]), (0, 255, 0), 0)
             cropImg_bigger = img[self.roi[0]+self.add_values_to_roi[0]:self.roi[1]+self.add_values_to_roi[1], self.roi[2]+self.add_values_to_roi[2]:self.roi[3]]
@@ -189,7 +187,7 @@ class Calibration:
         print(self.two_comp_label_list)
     
     def __get_hand_mask(self, prev: bool = False):
-        img_fill_holes=ndimage.binary_fill_holes(255 - self.mask).astype(np.uint8)
+        img_fill_holes = ndimage.binary_fill_holes(255 - self.mask).astype(np.uint8)
         imagenorm = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
         if (prev):
             cv2.imshow("filled", imagenorm)
@@ -219,29 +217,7 @@ class Calibration:
         cropImg_bigger = resized[roi[0]+self.add_values_to_roi[0]:roi[1]+self.add_values_to_roi[1], roi[2]+self.add_values_to_roi[2]:roi[3]]
         return cropImg_bigger
     
-    def load_saved_model(self, path: str):
-        with open(path, 'rb') as handle:
-            self.GMM_Model = pickle.load(handle)
-            
-    def load_saved_best_labels(self, path: str):
-        with open(path, 'rb') as handle:
-            self.two_comp_label_list = pickle.load(handle)
-    
-    def get_segmentation(self, img: np.array):
-        Shape = img.shape
-        imageLAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
-        L = np.array(imageLAB[:, :, 0]).flatten()
-        a = np.array(imageLAB[:, :, 1]).flatten()
-        b = np.array(imageLAB[:, :, 2]).flatten()
-        data = np.array([a, b]).transpose()
-
-        GMM_Labels = self.GMM_Model.predict(data)
-        
-        segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1])
-        
-        segmented = self.__get_two_comp_segmentation(segmented_labels)
-        return segmented
 
 if __name__ == "__main__":
     
