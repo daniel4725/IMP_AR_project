@@ -6,6 +6,7 @@ import time
 import pickle
 import matplotlib.pyplot as plt
 from scipy import ndimage
+import os
 from functools import wraps
 
 
@@ -214,7 +215,7 @@ class Calibration:
         dim = (640, 480)
         resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
         roi = [140, 360, 400, 620]  # [y_start, y_end, x_start, x_end]
-        cropImg_bigger = resized[roi[0]+self.add_values_to_roi[0]:roi[1]+self.add_values_to_roi[1], roi[2]+self.add_values_to_roi[2]:roi[3]]
+        cropImg_bigger = resized[roi[0] + self.add_values_to_roi[0]:roi[1] + self.add_values_to_roi[1], roi[2] + self.add_values_to_roi[2]:roi[3]]
         return cropImg_bigger
     
 
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     cal = Calibration()
     # cal.capture_hand(video_num = 0,stereo = False, print_roi_match = False)
     # cal.gmm_train(cal.GMM_Image)
-    img = cal.load_image_and_prepare_for_segmentation("test.png")
+    img = cal.load_image_and_prepare_for_segmentation(os.path.join("Video_and_picture_examples","test.png"))
     cal.gmm_train(img, Save_model=False)
     # cal.load_saved_model('hand_gmm_model.sav')
     
