@@ -1,0 +1,5 @@
+.venv/
+venv/
+ML/preview
+__pycache__/
+*.mp4
