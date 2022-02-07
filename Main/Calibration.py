@@ -10,17 +10,29 @@ import os
 from Video import Video_operations
 
 class Calibration:
-    def __init__(self):
+    def __init__(self, video_capture, video_writer = None, stereo: bool = False):
         self.flag = 0
         self.GMM_Image = np.zeros((400, 400))
         self.GMM_Model = None
         self.components_number = 4
-        self.roi = [140, 360, 400, 620]  # [y_start, y_end, x_start, x_end]
-        self.add_values_to_roi = [-40, 60, -100, 0]
-        self.video_operations = Video_operations()
         
-        zero_image = np.zeros((480, 640))
-        cropPrev = zero_image[self.roi[0]+1:self.roi[1]-1, self.roi[2]+1:self.roi[3]-1]
+        self.video_operations = Video_operations()
+        self.stereo = stereo
+        self.video_capture = video_capture
+        self.video_writer = video_writer
+        
+        cap = self.video_capture
+        while True:
+            suc, frame = cap.read()
+            if suc is True:
+                break
+        if stereo:
+            zero_image = np.zeros(self.video_operations.get_left_image(frame).shape)
+        else:
+            zero_image = np.zeros(frame.shape)
+        self.roi = [zero_image.shape[0] - 340, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
+        self.add_values_to_roi = [-40, 60, -100, 0]
+        cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         self.crop_shape = cropPrev.shape
         handExample = cv2.imread('handExample.jpeg')
         handExample = cv2.resize(handExample, (self.crop_shape[1], self.crop_shape[0]))
@@ -37,19 +49,19 @@ class Calibration:
         time.sleep(1)
         self.flag += 1
 
-    def capture_hand(self, video_capture, video_writer = None, stereo: bool = True, print_roi_match: bool = False, flip_camera: bool = False):
+    def capture_hand(self, print_roi_match: bool = False, flip_camera: bool = False):
         
-        cap = video_capture
+        cap = self.video_capture
         while True:
             suc, prev = cap.read()
             if suc is True:
                 break
-        if (stereo):
+        if (self.stereo):
             prev = prev[:, 0:int(prev.shape[1] / 2), :]  # left image
         if (flip_camera):
             prev = cv2.flip(prev, 1)
         
-        cropPrev = prev[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1]
+        cropPrev = prev[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
         numPixels = cropPrev.shape[0] * cropPrev.shape[1]
         tol = numPixels / 10
@@ -58,7 +70,7 @@ class Calibration:
         t1 = threading.Thread(target=self.timer_sec)
         while cap.isOpened():
             suc, img = cap.read()
-            if (stereo):
+            if (self.stereo):
                 left_image_view = self.video_operations.get_left_image(img)
                 right_image_view = self.video_operations.get_right_image(img)
                 img = img[:, 0:int(img.shape[1] / 2), :]  # left image
@@ -66,16 +78,20 @@ class Calibration:
                 img = cv2.flip(img, 1)
             imgView = np.array(img, copy=True)
             # cv2.rectangle(imgView, (roi[2], roi[0]), (roi[3], roi[1]), (0, 255, 0), 0)
-            cropImg_bigger = img[self.roi[0] + self.add_values_to_roi[0]:self.roi[1] + self.add_values_to_roi[1], self.roi[2] + self.add_values_to_roi[2]:self.roi[3]]
+            # cropImg_bigger = img[self.roi[0] + self.add_values_to_roi[0]:self.roi[1] + self.add_values_to_roi[1], self.roi[2] + self.add_values_to_roi[2]:self.roi[3]]
             # cropImg_bigger = img
 
-            cropImg = img[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1]
-            cropImgView = imgView[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1]
+            cropImg = img[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+            cropImgView = imgView[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
             cropImgView = cv2.bitwise_and(cropImgView, cropImgView, mask=self.mask)
-            imgView[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1] = cropImgView
-            if (stereo):
-                left_image_view[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1] = cropImgView
-                right_image_view[self.roi[0] + 1:self.roi[1] - 1, self.roi[2] + 1:self.roi[3] - 1] = cropImgView
+            imgView[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImgView
+            if (self.stereo):
+                cropImg_right_View = right_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+                cropImg_left_View = left_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+                cropImg_left_View = cv2.bitwise_and(cropImg_left_View, cropImg_left_View, mask=self.mask)
+                cropImg_right_View = cv2.bitwise_and(cropImg_right_View, cropImg_right_View, mask=self.mask)
+                left_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImg_left_View
+                right_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImg_right_View
 
             imgGray = cv2.cvtColor(cropImg, cv2.COLOR_BGR2GRAY)
             subImg = cv2.subtract(imgGray, prevGray)
@@ -91,38 +107,38 @@ class Calibration:
             if self.flag == 1:
                 cv2.putText(imgView, '3', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                 cv2.imshow('image', imgView)
-                if video_writer is not None:
+                if self.video_writer is not None:
                     cv2.putText(left_image_view, '3', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                     cv2.putText(right_image_view, '3', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
 
             if self.flag == 2:
                 cv2.putText(imgView, '2', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                 cv2.imshow('image', imgView)
-                if video_writer is not None:
+                if self.video_writer is not None:
                     cv2.putText(left_image_view, '2', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                     cv2.putText(right_image_view, '2', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
             if self.flag == 3:
                 cv2.putText(imgView, '1', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                 cv2.imshow('image', imgView)
-                if video_writer is not None:
+                if self.video_writer is not None:
                     cv2.putText(left_image_view, '1', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                     cv2.putText(right_image_view, '1', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
             if self.flag == 4:
                 cv2.putText(imgView, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                self.GMM_Image = cropImg_bigger
+                self.GMM_Image = img
                 cv2.imshow('image', imgView)
-                if video_writer is not None:
+                if self.video_writer is not None:
                     cv2.putText(left_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
                     cv2.putText(right_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
                 cv2.waitKey(5)
                 break
             cv2.imshow('image', imgView)
-            if video_writer is not None:
-                video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+            if self.video_writer is not None:
+                self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
                 cv2.imshow('Stereo', self.video_operations.image_concat(left_image_view, right_image_view))
             key = cv2.waitKey(5)
             if key == ord('q'):
@@ -158,7 +174,7 @@ class Calibration:
     
         fig = plt.figure()
         ax = fig.add_subplot(2, 3, 1)
-        imgplot = plt.imshow(segmented_labels)
+        imgplot = plt.imshow(segmented_labels+1)
         ax.set_title(f"Segmented with {n_components} components")
         ax = fig.add_subplot(2, 3, 2)
         imgplot = plt.imshow(cv2.cvtColor(GMM_image, cv2.COLOR_BGR2RGB))
@@ -188,12 +204,13 @@ class Calibration:
         return label_list
     
     def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array):
-        crop_by_ROI_segmented_labels = n_comp_segmented_img[-self.add_values_to_roi[0] + 1:-self.add_values_to_roi[1] - 1, -self.add_values_to_roi[2] + 1:-1]
-        crop_by_ROI_segmented_labels = crop_by_ROI_segmented_labels + 1
-        ret, mask = cv2.threshold(self.__get_hand_mask(), 10, 255, cv2.THRESH_BINARY)
+        full_mask = np.zeros(n_comp_segmented_img.shape).astype(np.uint8)
+        full_mask[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = self.__get_hand_mask()
+        ret, mask = cv2.threshold(full_mask, 10, 255, cv2.THRESH_BINARY)
         mask_inv = cv2.bitwise_not(mask)
-        self.crop_by_mask_segmented_labels = cv2.bitwise_and(crop_by_ROI_segmented_labels, crop_by_ROI_segmented_labels, mask = mask)
-        self.invert_crop_by_mask_segmented_labels = cv2.bitwise_and(crop_by_ROI_segmented_labels, crop_by_ROI_segmented_labels, mask = mask_inv)
+        img = n_comp_segmented_img + 1
+        self.crop_by_mask_segmented_labels = cv2.bitwise_and(img, img, mask = mask)
+        self.invert_crop_by_mask_segmented_labels = cv2.bitwise_and(img, img, mask = mask_inv)
         good_label_list = self.__count_labels(self.crop_by_mask_segmented_labels)
         bad_label_list = self.__count_labels(self.invert_crop_by_mask_segmented_labels)
         self.two_comp_label_list =  self.__remove_bad_labels(good_label_list, bad_label_list)
@@ -201,10 +218,10 @@ class Calibration:
     
     def __get_hand_mask(self, prev: bool = False):
         img_fill_holes = ndimage.binary_fill_holes(255 - self.mask).astype(np.uint8)
-        imagenorm = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+        norm_image = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
         if (prev):
-            cv2.imshow("filled", imagenorm)
-        return imagenorm
+            cv2.imshow("filled", norm_image)
+        return norm_image
     
     def __remove_bad_labels(self, main_list: list, second_list: list):
         if (len(main_list) == 1):
@@ -234,15 +251,23 @@ class Calibration:
 
 if __name__ == "__main__":
     
-    cal = Calibration()
-    video_cap = cv2.VideoCapture(0)
-    cal.capture_hand(video_cap, stereo=False, print_roi_match=False, flip_camera=False)
+    video_operations = Video_operations()
+    
+    # video_cap = cv2.VideoCapture(0)
+    video_cap = video_operations.open_gstreamer_video_capture()
+    video_write = video_operations.open_gstreamer_video_writer()
+    cal = Calibration(video_cap, stereo=True, video_writer=video_write)
+    # cal = Calibration(video_cap)
+
+    
+    cal.capture_hand(print_roi_match=True, flip_camera=True)
     # cal.capture_hand(cal.video_operations.open_gstreamer_video_capture(), cal.video_operations.open_gstreamer_video_writer(), stereo=True, print_roi_match=False, flip_camera=False)
 
     cal.gmm_train(cal.GMM_Image, Save_model=False)
     # cal.video_operations.close_gstreamer_video_capture()
     # cal.video_operations.close_gstreamer_video_writer()
     video_cap.release()
+    video_write.release()
     # img = cal.load_image_and_prepare_for_segmentation(os.path.join("Video_and_picture_examples","test.png"))
     # cal.gmm_train(img, Save_model=False)
     # cal.load_saved_model('hand_gmm_model.sav')
