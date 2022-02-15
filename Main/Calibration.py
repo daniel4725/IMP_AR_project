@@ -32,7 +32,6 @@ class Calibration:
         else:
             zero_image = np.zeros(frame.shape)
         self.roi = [zero_image.shape[0] - 340, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
-        self.add_values_to_roi = [-40, 60, -100, 0]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         self.crop_shape = cropPrev.shape
         handExample = cv2.imread('handExample.jpeg')
@@ -219,14 +218,6 @@ class Calibration:
         reduced_GMM_Labels_segmented_img = np.zeros(n_comp_segmented_img.shape)
         reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, self.two_comp_label_list)] = 1
         return reduced_GMM_Labels_segmented_img
-
-    def load_image_and_prepare_for_segmentation(self, path: str):
-        image = cv2.imread(path)
-        dim = (640, 480)
-        resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
-        roi = [140, 360, 400, 620]  # [y_start, y_end, x_start, x_end]
-        cropImg_bigger = resized[roi[0] + self.add_values_to_roi[0]:roi[1] + self.add_values_to_roi[1], roi[2] + self.add_values_to_roi[2]:roi[3]]
-        return cropImg_bigger
     
 
 

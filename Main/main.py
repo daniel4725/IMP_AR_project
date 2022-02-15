@@ -35,7 +35,7 @@ def hand_contour(image: np.array):
         return contours[0]
 
 def draw_contour(image: np.array, contour: np.array):
-    cv2.drawContours(image, contour, -1, (0,255,0), 3)
+    cv2.drawContours(image, contour, -1, (255,0,0), 3)
 
 def test_function(frame):
     import cv2
@@ -48,9 +48,9 @@ def main():
     video = Video_operations()
     
     gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.144")
-    gstreamer_capture = video.open_gstreamer_video_capture()
-    
-    video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
+    gstreamer_capture = video.open_gstreamer_video_capture(flip=True)
+    video.start_thread_record_view_send(test_function)
+    # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
     video.close_gstreamer_video_capture()
     

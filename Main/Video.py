@@ -8,6 +8,9 @@ os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib')
 
 import cv2
 import numpy as np 
+import threading
+import time
+from queue import Queue
 
 class Video_operations:
     
@@ -15,6 +18,9 @@ class Video_operations:
         self.gstreamer_writer = None
         self.cap_receive = None
         self.frame_counter = 0
+        self.frame_queue = Queue()
+        self.fps = None
+        self.flip = False
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, (1280,360), True)
@@ -29,9 +35,9 @@ class Video_operations:
         if self.gstreamer_writer is not None:
             self.gstreamer_writer.release()
     
-    def open_gstreamer_video_capture(self):
+    def open_gstreamer_video_capture(self, flip: bool = False):
         self.gstreamer_capture = cv2.VideoCapture('udpsrc port=5005 caps = "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96" ! rtph264depay ! decodebin ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
-        
+        self.flip = flip
         if not self.gstreamer_capture.isOpened():
             print('VideoCapture not opened')
             exit(0)
@@ -73,8 +79,8 @@ class Video_operations:
         cv2.destroyAllWindows()
         
     def view_and_send_video(self, video_capture, video_writer, func):
-        fps = video_capture.get(cv2.CAP_PROP_FPS)
-        print(fps)
+        self.fps = video_capture.get(cv2.CAP_PROP_FPS)
+        print(self.fps)
 
         while True:
              
@@ -84,23 +90,69 @@ class Video_operations:
                 print('empty frame')
                 break
             
-            self.frame_counter += 1
-            if (self.frame_counter % 2) == 0:
-                left_frame = self.get_left_image(frame)
-                right_frame = self.get_right_image(frame)
-                left_frame = func(left_frame)
-                right_frame = func(right_frame)
-                frame = self.image_concat(left_frame, right_frame)
+            # self.frame_counter += 1
+            # if (self.frame_counter % 2) == 0:
+            #     left_frame = self.get_left_image(frame)
+            #     right_frame = self.get_right_image(frame)
+            #     left_frame = func(left_frame)
+            #     right_frame = func(right_frame)
+            #     frame = self.image_concat(left_frame, right_frame)
             
             video_writer.write(frame)
             cv2.imshow('Video', frame)
 
-            key = cv2.waitKey(int(500 / fps))
+            key = cv2.waitKey(int(500 / self.fps))
             if key == ord('q'):
                 break
   
         cv2.destroyAllWindows()
+    
+    def start_thread_record_view_send(self, func):
+        record_thread = threading.Thread(target=self.__thread_record)
+        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,))
+        record_thread.start()
+        view_and_send_thread.start()
+        record_thread.join()
+        view_and_send_thread.join()
         
+    def __thread_record(self):
+        while True:
+             
+            ret, frame = self.gstreamer_capture.read()
+            self.fps = self.gstreamer_capture.get(cv2.CAP_PROP_FPS)
+
+            if not ret:
+                print('empty frame')
+                break
+            self.frame_counter += 1
+            if (self.frame_counter % 8) == 0:
+                self.frame_queue.put(frame)
+    
+    def __view_thread_video_and_send_video(self, func):
+        
+        while True:
+             
+            frame = self.frame_queue.get()
+            
+            left_frame = self.get_left_image(frame)
+            right_frame = self.get_right_image(frame)
+            if self.flip:
+                left_frame = cv2.flip(left_frame, 1)
+                right_frame = cv2.flip(right_frame, 1)
+            left_frame = func(left_frame)
+            right_frame = func(right_frame)
+            frame = self.image_concat(left_frame, right_frame)
+            
+            time.sleep(0.08)
+            self.gstreamer_writer.write(frame)
+            cv2.imshow('Video', frame)
+
+            key = cv2.waitKey(10)
+            if key == ord('q'):
+                break
+  
+        cv2.destroyAllWindows()
+      
     def save_and_preview_video_from_other_video(self, func, source: str, destination: str, ):
         cap = cv2.VideoCapture(source)
         fps = cap.get(cv2.CAP_PROP_FPS)
