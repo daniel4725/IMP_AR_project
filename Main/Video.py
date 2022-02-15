@@ -14,9 +14,10 @@ class Video_operations:
     def __init__(self):
         self.gstreamer_writer = None
         self.cap_receive = None
+        self.frame_counter = 0
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
-        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=500 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, (1280,360), True)
+        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, (1280,360), True)
 
         if not self.gstreamer_writer.isOpened():
             print('VideoWriter not opened')
@@ -83,7 +84,13 @@ class Video_operations:
                 print('empty frame')
                 break
             
-            frame = func(frame)
+            self.frame_counter += 1
+            if (self.frame_counter % 2) == 0:
+                left_frame = self.get_left_image(frame)
+                right_frame = self.get_right_image(frame)
+                left_frame = func(left_frame)
+                right_frame = func(right_frame)
+                frame = self.image_concat(left_frame, right_frame)
             
             video_writer.write(frame)
             cv2.imshow('Video', frame)
