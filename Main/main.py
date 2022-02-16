@@ -34,13 +34,15 @@ def hand_contour(image: np.array):
 
 def draw_contour(image: np.array, contour: np.array):
     cv2.drawContours(image, contour, -1, (255,0,0), 3)
+    
 
 def test_function(frame):
     import cv2
     cv2.putText(frame, "test", (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
     contour = hand_contour(frame)
-    draw_contour(frame, contour)  
+    draw_contour(frame, contour)
     return frame
+
 
 def main():
     video = Video_operations()

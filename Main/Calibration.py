@@ -8,11 +8,12 @@ import matplotlib.pyplot as plt
 from scipy import ndimage
 import os
 from Video import Video_operations
+import multiprocessing
 
 class Calibration:
     def __init__(self, video_operations: Video_operations):
-        self.timer = 10
-        self.count_down = 10
+        self.timer = 3
+        self.count_down = 3
         self.GMM_Image = np.zeros((400, 400))
         self.video_operations = video_operations
         self.roi = None
@@ -22,20 +23,35 @@ class Calibration:
         self.image_shape = None
         self.calibrate_state = 0
         self.capture_state = 0
+        self.stereo = True
+        self.crop_empty_frame_gray = None
+        self.tol = 0
+        self.timing_thread = None
+        self.capture_image = None
+        self.gmm_result_figure = None
+        self.data = None
+        
         
 
     def GMM_calibrate(self, image: np.array):
-        self.__State_machine(image, self.calibrate_state)
+        return self.__State_machine(image, self.calibrate_state, self.stereo)
         
     
-    def __State_machine(self, image: np.array, state: int):
+    def __State_machine(self, image: np.array, state: int, stereo: bool = False):
         if state == 0:
-            self.__get_image_from_camera_shape(image)
+            if stereo == True:
+                self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
+            else:
+                self.__get_image_from_camera_shape(image)
             self.__create_hand_mask()    
             self.calibrate_state = 1
             return image
         elif state == 1:
-            pass
+            return self.capture_hand(image, True, self.stereo)
+        elif state == 2:
+            return self.gmm_train(self.GMM_Image, Save_model=False)
+        elif state == 3:
+            return self.gmm_result_figure
 
     
     def __get_image_from_camera_shape(self, image: np.array):
@@ -78,68 +94,63 @@ class Calibration:
 
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.video_operations.draw_contour_two_image_or_one(zero_image, self.__create_hand_contour(), channels=1)
+        self.video_operations.draw_contour_two_image_or_one(zero_image, self.__create_hand_contour(), channels=1, stereo=False)
 
         img_fill_holes = ndimage.binary_fill_holes(zero_image).astype(np.uint8)
         self.mask = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
         return self.mask
 
-    def timer_sec(self):
+    def __timer_sec(self):
         for i in range(self.timer):
             time.sleep(1)
             self.count_down -= 1
 
-    # def capture_hand(self, image: np.array, print_roi_match: bool = False):
+    def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
         
-    #     if self.capture_state == 0:
-    #         crop_empty_frame = image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-    #         crop_empty_frame_gray = cv2.cvtColor(crop_empty_frame, cv2.COLOR_BGR2GRAY)
-    #         numPixels = crop_empty_frame_gray.shape[0] * crop_empty_frame_gray.shape[1]
-    #         tol = numPixels / 10
-    #         change = 0
-    #         startTimer = False
-    #         t1 = threading.Thread(target=self.timer_sec)
-    #         started_flag = False
-    #         self.capture_state = 1
-    #     elif self.capture_state == 1:
-    #         crop_frame = image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-    #         crop_frame_gray = cv2.cvtColor(crop_frame, cv2.COLOR_BGR2GRAY)
-    #         subImg = cv2.subtract(crop_frame_gray, crop_empty_frame_gray)
-    #         y = subImg.reshape(1, -1)
-    #         change = (y >= 10).sum()
-    #         if(print_roi_match):
-    #             print(tol)
-    #             print(change)
-    #         if change >= tol:
-    #             startTimer = True
-    #         if startTimer == True:
-    #             t1.start()
-    #             started_flag = True
-    #         if self.flag != 0 and started_flag:
-    #             cv2.putText(imgView, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #             cv2.imshow('image', imgView)
-    #             if self.video_writer is not None:
-    #                 cv2.putText(left_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #                 cv2.putText(right_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #                 self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-    #         elif self.flag == 0 and started_flag:
-    #             cv2.putText(imgView, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #             self.GMM_Image = img
-    #             cv2.imshow('image', imgView)
-    #             if self.video_writer is not None:
-    #                 cv2.putText(left_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #                 cv2.putText(right_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    #                 self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-    #             cv2.waitKey(5)
-    #             break
-    #         cv2.imshow('image', imgView)
-    #         if self.video_writer is not None:
-    #             self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-    #             cv2.imshow('Stereo', self.video_operations.image_concat(left_image_view, right_image_view))
-    #         key = cv2.waitKey(5)
-    #         if key == ord('q'):
-    #             break
-    #     cv2.destroyAllWindows()
+        if self.capture_state == 0:
+            if stereo == True:
+                capture_image = self.video_operations.get_left_image(image)
+            else:
+                capture_image = image
+            crop_empty_frame = capture_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+            self.crop_empty_frame_gray = cv2.cvtColor(crop_empty_frame, cv2.COLOR_BGR2GRAY)
+            numPixels = self.crop_empty_frame_gray.shape[0] * self.crop_empty_frame_gray.shape[1]
+            self.tol = numPixels / 10
+            change = 0
+            self.timing_thread = threading.Thread(target=self.__timer_sec)
+            self.capture_state = 1
+        elif self.capture_state == 1:
+            if stereo == True:
+                self.capture_image = self.video_operations.get_left_image(image)
+            else:
+                self.capture_image = image
+            crop_frame = self.capture_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+            crop_frame_gray = cv2.cvtColor(crop_frame, cv2.COLOR_BGR2GRAY)
+            subImg = cv2.subtract(crop_frame_gray, self.crop_empty_frame_gray)
+            y = subImg.reshape(1, -1)
+            change = (y >= 10).sum()
+            if(print_roi_match):
+                print(self.tol)
+                print(change)
+            if change >= self.tol:
+                self.capture_state = 2
+                self.timing_thread.start()
+            self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+        elif self.capture_state == 2:
+            if self.count_down != 0:
+                self.video_operations.draw_text_two_image_or_one(image, str(self.count_down), (0, 50), stereo)
+                self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+            elif self.count_down == 0:
+                if stereo == True:
+                    self.GMM_Image = np.array(self.video_operations.get_left_image(image) , copy=True)
+                else:
+                    self.GMM_Image = np.array(image , copy=True)
+                self.video_operations.draw_text_two_image_or_one(image, "Image Saved", (0, 50), stereo)
+                self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+                self.capture_state = 0
+                self.calibrate_state = 2
+                self.timing_thread.join()
+        return image
 
     def gmm_train(self, GMM_image: np.array, Save_model: bool = True):
         Shape = GMM_image.shape
@@ -167,24 +178,47 @@ class Calibration:
             filename = 'hand_best_labels.sav'
             pickle.dump(self.two_comp_label_list, open(filename, 'wb'))
 
+        self.__create_multiple_image((segmented_labels+1), GMM_image, segmented)
+        left_image = self.video_operations.image_resize(self.data, 0.7)
+        self.video_operations.draw_text_two_image_or_one(left_image, "Is the segmentation good?", (0, 50))
+        right_image = self.video_operations.image_resize(self.data, 0.7)
+        self.video_operations.draw_text_two_image_or_one(right_image, "Is the segmentation good?", (0, 50))
+
+        self.gmm_result_figure = self.video_operations.image_concat(left_image, right_image)
+        self.calibrate_state = 3
+        
+        return self.gmm_result_figure
+        
+    def __create_multiple_image(self, segmented_labels, GMM_image, segmented):    
+        segmented_labels_image = self.__convert_lables_to_rgb_image(segmented_labels)
+        two_lables_image = self.__convert_lables_to_rgb_image(segmented)
+        first_line_image = np.concatenate([GMM_image, segmented_labels_image, two_lables_image], axis=1)
+        crop_by_mask_labels_image = self.__convert_lables_to_rgb_image(self.crop_by_mask_segmented_labels)
+        inv_crop_by_mask_labels_image = self.__convert_lables_to_rgb_image(self.invert_crop_by_mask_segmented_labels)
+        second_line_image = np.concatenate([crop_by_mask_labels_image, inv_crop_by_mask_labels_image], axis=1)
+        second_line_image = self.video_operations.three_dim_image_resize(second_line_image, first_line_image.shape)
+        final_image = np.concatenate([first_line_image, second_line_image], axis=0)
+        self.data = cv2.resize(final_image, (segmented_labels.shape[1],segmented_labels.shape[0]))
     
-        fig = plt.figure()
-        ax = fig.add_subplot(2, 3, 1)
-        imgplot = plt.imshow(segmented_labels+1)
-        ax.set_title(f"Segmented with {n_components} components")
-        ax = fig.add_subplot(2, 3, 2)
-        imgplot = plt.imshow(cv2.cvtColor(GMM_image, cv2.COLOR_BGR2RGB))
-        ax.set_title('Original')
-        ax = fig.add_subplot(2, 3, 3)
-        imgplot = plt.imshow(segmented)
-        ax.set_title(f"Segmented with 2 components")
-        ax = fig.add_subplot(2, 3, 4)
-        imgplot = plt.imshow(self.crop_by_mask_segmented_labels)
-        ax.set_title(f"Hand crop segmention")
-        ax = fig.add_subplot(2, 3, 5)
-        imgplot = plt.imshow(self.invert_crop_by_mask_segmented_labels)
-        ax.set_title(f"Invert hand crop segmention")
-        plt.show()
+    def __convert_lables_to_rgb_image(self, labled_image: np.array):
+        label_to_color = {
+            0: [0,     0,   0],
+            1: [255,  87,  51],
+            2: [ 66, 255,  51],
+            3: [ 51,  79, 255],
+            4: [255, 249,  51],
+            5: [246,  51, 255],
+            6: [244, 180,  60],
+            7: [171, 81,  237]
+        }
+
+        h, w = labled_image.shape
+        img_rgb = np.zeros((h, w, 3), dtype=np.uint8)
+
+        for gray, rgb in label_to_color.items():
+            img_rgb[labled_image == gray, :] = rgb
+        
+        return img_rgb        
         
     def __count_labels(self, prediction: np.array):
         unique, counts = np.unique(prediction, return_counts=True)
@@ -200,24 +234,16 @@ class Calibration:
         return label_list
     
     def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array):
-        full_mask = np.zeros(n_comp_segmented_img.shape).astype(np.uint8)
-        full_mask[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = self.__get_hand_mask()
-        ret, mask = cv2.threshold(full_mask, 10, 255, cv2.THRESH_BINARY)
+        ret, mask = cv2.threshold(self.mask, 10, 255, cv2.THRESH_BINARY)
         mask_inv = cv2.bitwise_not(mask)
         img = n_comp_segmented_img + 1
         self.crop_by_mask_segmented_labels = cv2.bitwise_and(img, img, mask = mask)
         self.invert_crop_by_mask_segmented_labels = cv2.bitwise_and(img, img, mask = mask_inv)
         good_label_list = self.__count_labels(self.crop_by_mask_segmented_labels)
         bad_label_list = self.__count_labels(self.invert_crop_by_mask_segmented_labels)
-        self.two_comp_label_list =  self.__remove_bad_labels(good_label_list, bad_label_list)
+        # self.two_comp_label_list =  self.__remove_bad_labels(good_label_list, bad_label_list)
+        self.two_comp_label_list =  good_label_list
         print(self.two_comp_label_list)
-    
-    def __get_hand_mask(self, prev: bool = False):
-        img_fill_holes = ndimage.binary_fill_holes(255 - self.mask).astype(np.uint8)
-        norm_image = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        if (prev):
-            cv2.imshow("filled", norm_image)
-        return norm_image
     
     def __remove_bad_labels(self, main_list: list, second_list: list):
         if (len(main_list) == 1):

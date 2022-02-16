@@ -108,14 +108,14 @@ class Video_operations:
         cv2.destroyAllWindows()
     
     def start_thread_record_view_send(self, func):
-        record_thread = threading.Thread(target=self.__thread_record)
+        record_thread = threading.Thread(target=self.__thread_record_from_camera)
         view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,))
         record_thread.start()
         view_and_send_thread.start()
         record_thread.join()
         view_and_send_thread.join()
         
-    def __thread_record(self):
+    def __thread_record_from_camera(self):
         while True:
              
             ret, frame = self.gstreamer_capture.read()
@@ -140,11 +140,9 @@ class Video_operations:
             if self.flip:
                 left_frame = cv2.flip(left_frame, 1)
                 right_frame = cv2.flip(right_frame, 1)
-            left_frame = func(left_frame)
-            right_frame = func(right_frame)
             frame = self.image_concat(left_frame, right_frame)
-            
-            time.sleep(0.08) # delay 
+            frame = func(frame)
+            # time.sleep(0.08) # delay 
             
             self.ready_to_read = True
             self.gstreamer_writer.write(frame)
@@ -193,6 +191,16 @@ class Video_operations:
         
         else:
             return self.__draw_contour(image, contour, channels)
+        
+    def draw_text_two_image_or_one(self, image: np.array, text: str, position: tuple, stereo: bool = False):
+        if stereo == True:
+            
+            left_image = cv2.putText(self.get_left_image(image), f'{text}', position, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+            right_image = cv2.putText(self.get_right_image(image), f'{text}', position, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+            return self.image_concat(left_image, right_image)
+        
+        else:
+            return cv2.putText(image, f'{text}', position, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
         
     def __draw_contour(self, image: np.array, contour: np.array, channels: int = 3):
         """
@@ -251,7 +259,43 @@ class Video_operations:
         dst_l = cv2.undistort(im_l, self.cam, self.distCoeff)
         dst_r = cv2.undistort(im_r, self.cam, self.distCoeff)
         return np.concatenate([dst_l, dst_r], axis=1)
-            
+    
+    def image_resize(self, image: np.array, factor: int):
+        shape = image.shape
+        new_image = np.zeros(shape).astype(np.uint8)
+        hh, ww = shape[0] , shape[1] 
+
+        if len(shape) == 3:
+            resized_image_r = cv2.resize(image[:,:,0], (round(shape[1]*factor), round(shape[0]*factor)))
+            resized_image_g = cv2.resize(image[:,:,1], (round(shape[1]*factor), round(shape[0]*factor)))
+            resized_image_b = cv2.resize(image[:,:,2], (round(shape[1]*factor), round(shape[0]*factor)))
+        else:
+            resized_image = cv2.resize(image, (round(shape[1]*factor), round(shape[0]*factor)))
+        h, w = round(shape[0]*factor) , round(shape[1]*factor)
+
+        yoff = round((hh-h)/2)
+        xoff = round((ww-w)/2)
+        
+        if len(shape) == 3:
+            new_image[yoff:yoff+h, xoff:xoff+w, 2] = resized_image_r
+            new_image[yoff:yoff+h, xoff:xoff+w, 1] = resized_image_g
+            new_image[yoff:yoff+h, xoff:xoff+w, 0] = resized_image_b
+        else:
+            new_image[yoff:yoff+h, xoff:xoff+w] = resized_image
+        return new_image
+    
+    def three_dim_image_resize(self, image: np.array, shape: np.array):
+        new_image = np.zeros(shape).astype(np.uint8)
+        
+        resized_image_r = cv2.resize(image[:,:,0], (shape[1], shape[0]))
+        resized_image_g = cv2.resize(image[:,:,1], (shape[1], shape[0]))
+        resized_image_b = cv2.resize(image[:,:,2], (shape[1], shape[0]))
+        
+        new_image[:,:,2] = resized_image_r
+        new_image[:,:,1] = resized_image_g
+        new_image[:,:,0] = resized_image_b
+        
+        return new_image    
 if __name__ == "__main__":
     
     video = Video_operations()
