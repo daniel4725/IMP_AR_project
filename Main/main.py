@@ -8,8 +8,6 @@ import numpy as np
 from functools import wraps
 from time import time
 
-frame_counter = 0
-
 def measure(func):
     @wraps(func)
     def _time_it(*args, **kwargs):

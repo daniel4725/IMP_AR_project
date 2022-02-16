@@ -17,7 +17,7 @@ class Video_operations:
     def __init__(self):
         self.gstreamer_writer = None
         self.cap_receive = None
-        self.frame_counter = 0
+        self.ready_to_read = True
         self.frame_queue = Queue()
         self.fps = None
         self.flip = False
@@ -124,8 +124,9 @@ class Video_operations:
             if not ret:
                 print('empty frame')
                 break
-            self.frame_counter += 1
-            if (self.frame_counter % 8) == 0:
+
+            if (self.ready_to_read):
+                self.ready_to_read = False
                 self.frame_queue.put(frame)
     
     def __view_thread_video_and_send_video(self, func):
@@ -143,7 +144,9 @@ class Video_operations:
             right_frame = func(right_frame)
             frame = self.image_concat(left_frame, right_frame)
             
-            time.sleep(0.08)
+            time.sleep(0.08) # delay 
+            
+            self.ready_to_read = True
             self.gstreamer_writer.write(frame)
             cv2.imshow('Video', frame)
 
