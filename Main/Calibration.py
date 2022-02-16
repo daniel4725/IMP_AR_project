@@ -10,120 +10,136 @@ import os
 from Video import Video_operations
 
 class Calibration:
-    def __init__(self, video_capture, video_writer = None, stereo: bool = False):
+    def __init__(self, video_operations: Video_operations):
         self.timer = 10
-        self.flag = 10
+        self.count_down = 10
         self.GMM_Image = np.zeros((400, 400))
+        self.video_operations = video_operations
+        self.roi = None
         self.GMM_Model = None
         self.components_number = 4
+        self.hand_contour = None
+        self.image_shape = None
+        self.calibrate_state = 0
+        self.capture_state = 0
         
-        self.video_operations = Video_operations()
-        self.stereo = stereo
-        self.video_capture = video_capture
-        self.video_writer = video_writer
+
+    def GMM_calibrate(self, image: np.array):
+        self.__State_machine(image, self.calibrate_state)
         
-        cap = self.video_capture
-        while True:
-            suc, frame = cap.read()
-            if suc is True:
-                break
-        if stereo:
-            zero_image = np.zeros(self.video_operations.get_left_image(frame).shape)
-        else:
-            zero_image = np.zeros(frame.shape)
+    
+    def __State_machine(self, image: np.array, state: int):
+        if state == 0:
+            self.__get_image_from_camera_shape(image)
+            self.__create_hand_mask()    
+            self.calibrate_state = 1
+            return image
+        elif state == 1:
+            pass
+
+    
+    def __get_image_from_camera_shape(self, image: np.array):
+        """
+        __get_image_from_camera_shape Get the shape of the image from the camera
+
+        Args:
+            image (np.array): 3-channel image
+        
+        Returns:
+            self.image_shape (np.array): 3 array.
+        """
+        self.image_shape = image.shape
+        return self.image_shape
+    
+    def __create_hand_contour(self):
+        """
+        __create_hand_contour Create hand contour in specific place on image.
+
+        Returns:
+            list: cv2.contuor array with all points of the contour
+        """
+        zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
         self.roi = [zero_image.shape[0] - 340, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-        self.crop_shape = cropPrev.shape
+        crop_shape = cropPrev.shape
         handExample = cv2.imread('handExample.jpeg')
-        handExample = cv2.resize(handExample, (self.crop_shape[1], self.crop_shape[0]))
+        handExample = cv2.resize(handExample, (crop_shape[1], crop_shape[0]))
         handExampleGray = cv2.cvtColor(handExample, cv2.COLOR_BGR2GRAY)
-        ret, self.mask = cv2.threshold(handExampleGray, 10, 255, cv2.THRESH_BINARY)
+        zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = 255 - handExampleGray
+        ret, mask = cv2.threshold(zero_image, 127, 255, cv2.THRESH_BINARY)
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        self.hand_contour = contours[0]
+        return self.hand_contour
+    
+    
+    def __create_hand_mask(self):
+        """
+        __create_hand_mask Create mask of hand in the shape of full image from camera.
+
+        """
+        zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
+        self.video_operations.draw_contour_two_image_or_one(zero_image, self.__create_hand_contour(), channels=1)
+
+        img_fill_holes = ndimage.binary_fill_holes(zero_image).astype(np.uint8)
+        self.mask = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+        return self.mask
 
     def timer_sec(self):
         for i in range(self.timer):
             time.sleep(1)
-            self.flag -= 1
+            self.count_down -= 1
 
-    def capture_hand(self, print_roi_match: bool = False, flip_camera: bool = False):
+    # def capture_hand(self, image: np.array, print_roi_match: bool = False):
         
-        cap = self.video_capture
-        while True:
-            suc, prev = cap.read()
-            if suc is True:
-                break
-        if (self.stereo):
-            prev = prev[:, 0:int(prev.shape[1] / 2), :]  # left image
-        if (flip_camera):
-            prev = cv2.flip(prev, 1)
-        
-        cropPrev = prev[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-        prevGray = cv2.cvtColor(cropPrev, cv2.COLOR_BGR2GRAY)
-        numPixels = cropPrev.shape[0] * cropPrev.shape[1]
-        tol = numPixels / 10
-        change = 0
-        startTimer = 0
-        t1 = threading.Thread(target=self.timer_sec)
-        started_flag = False
-        while cap.isOpened():
-            suc, img = cap.read()
-            if (self.stereo):
-                left_image_view = self.video_operations.get_left_image(img)
-                right_image_view = self.video_operations.get_right_image(img)
-                img = img[:, 0:int(img.shape[1] / 2), :]  # left image
-            if (flip_camera):
-                img = cv2.flip(img, 1)
-            imgView = np.array(img, copy=True)
-            cv2.imshow('test',img)
-
-            cropImg = img[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-            cropImgView = imgView[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-            cropImgView = cv2.bitwise_and(cropImgView, cropImgView, mask=self.mask)
-            imgView[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImgView
-            if (self.stereo):
-                cropImg_left_View = left_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-                cropImg_left_View = cv2.bitwise_and(cropImg_left_View, cropImg_left_View, mask=self.mask)
-                cropImg_right_View = right_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
-                cropImg_right_View = cv2.bitwise_and(cropImg_right_View, cropImg_right_View, mask=self.mask)
-                left_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImg_left_View
-                right_image_view[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = cropImg_right_View
-
-            imgGray = cv2.cvtColor(cropImg, cv2.COLOR_BGR2GRAY)
-            subImg = cv2.subtract(imgGray, prevGray)
-            y = subImg.reshape(1, -1)
-            change = (y >= 10).sum()
-            if(print_roi_match):
-                print(tol)
-                print(change)
-            if change >= tol:
-                startTimer += 1
-            if startTimer == 1:
-                t1.start()
-                started_flag = True
-            if self.flag != 0 and started_flag:
-                cv2.putText(imgView, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                cv2.imshow('image', imgView)
-                if self.video_writer is not None:
-                    cv2.putText(left_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    cv2.putText(right_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-            elif self.flag == 0 and started_flag:
-                cv2.putText(imgView, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                self.GMM_Image = img
-                cv2.imshow('image', imgView)
-                if self.video_writer is not None:
-                    cv2.putText(left_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    cv2.putText(right_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-                    self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-                cv2.waitKey(5)
-                break
-            cv2.imshow('image', imgView)
-            if self.video_writer is not None:
-                self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
-                cv2.imshow('Stereo', self.video_operations.image_concat(left_image_view, right_image_view))
-            key = cv2.waitKey(5)
-            if key == ord('q'):
-                break
-        cv2.destroyAllWindows()
+    #     if self.capture_state == 0:
+    #         crop_empty_frame = image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+    #         crop_empty_frame_gray = cv2.cvtColor(crop_empty_frame, cv2.COLOR_BGR2GRAY)
+    #         numPixels = crop_empty_frame_gray.shape[0] * crop_empty_frame_gray.shape[1]
+    #         tol = numPixels / 10
+    #         change = 0
+    #         startTimer = False
+    #         t1 = threading.Thread(target=self.timer_sec)
+    #         started_flag = False
+    #         self.capture_state = 1
+    #     elif self.capture_state == 1:
+    #         crop_frame = image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+    #         crop_frame_gray = cv2.cvtColor(crop_frame, cv2.COLOR_BGR2GRAY)
+    #         subImg = cv2.subtract(crop_frame_gray, crop_empty_frame_gray)
+    #         y = subImg.reshape(1, -1)
+    #         change = (y >= 10).sum()
+    #         if(print_roi_match):
+    #             print(tol)
+    #             print(change)
+    #         if change >= tol:
+    #             startTimer = True
+    #         if startTimer == True:
+    #             t1.start()
+    #             started_flag = True
+    #         if self.flag != 0 and started_flag:
+    #             cv2.putText(imgView, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #             cv2.imshow('image', imgView)
+    #             if self.video_writer is not None:
+    #                 cv2.putText(left_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #                 cv2.putText(right_image_view, f'{self.flag}', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #                 self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+    #         elif self.flag == 0 and started_flag:
+    #             cv2.putText(imgView, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #             self.GMM_Image = img
+    #             cv2.imshow('image', imgView)
+    #             if self.video_writer is not None:
+    #                 cv2.putText(left_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #                 cv2.putText(right_image_view, 'Image saved', (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    #                 self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+    #             cv2.waitKey(5)
+    #             break
+    #         cv2.imshow('image', imgView)
+    #         if self.video_writer is not None:
+    #             self.video_writer.write(self.video_operations.image_concat(left_image_view, right_image_view))
+    #             cv2.imshow('Stereo', self.video_operations.image_concat(left_image_view, right_image_view))
+    #         key = cv2.waitKey(5)
+    #         if key == ord('q'):
+    #             break
+    #     cv2.destroyAllWindows()
 
     def gmm_train(self, GMM_image: np.array, Save_model: bool = True):
         Shape = GMM_image.shape
@@ -223,25 +239,15 @@ class Calibration:
 
 if __name__ == "__main__":
     
-    video_operations = Video_operations()
+    video = Video_operations()
+    cal = Calibration(video)
     
-    # video_cap = cv2.VideoCapture(0)
-    video_cap = video_operations.open_gstreamer_video_capture()
-    video_write = video_operations.open_gstreamer_video_writer()
-    cal = Calibration(video_cap, stereo=True, video_writer=video_write)
-    # cal = Calibration(video_cap)
-
-    
-    cal.capture_hand(print_roi_match=False, flip_camera=True)
-
-    cal.gmm_train(cal.GMM_Image, Save_model=False)
-    # cal.video_operations.close_gstreamer_video_capture()
-    # cal.video_operations.close_gstreamer_video_writer()
-    video_cap.release()
-    video_write.release()
-    # img = cal.load_image_and_prepare_for_segmentation(os.path.join("Video_and_picture_examples","test.png"))
-    # cal.gmm_train(img, Save_model=False)
-    # cal.load_saved_model('hand_gmm_model.sav')
+    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.144")
+    gstreamer_capture = video.open_gstreamer_video_capture(flip=True)
+    video.start_thread_record_view_send(cal.GMM_calibrate)
+    # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
+    video.close_gstreamer_video_writer()
+    video.close_gstreamer_video_capture()
     
     
 

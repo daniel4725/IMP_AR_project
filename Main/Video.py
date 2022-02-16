@@ -184,6 +184,31 @@ class Video_operations:
         cap.release()
         out.release()
         cv2.destroyAllWindows()
+        
+    def draw_contour_two_image_or_one(self, image: np.array, contour: np.array, channels: int = 3, stereo: bool = False):
+        if stereo == True:
+            left_image = self.__draw_contour(self.get_left_image(image), contour, channels)
+            right_image = self.__draw_contour(self.get_right_image(image), contour, channels)
+            return self.image_concat(left_image, right_image)
+        
+        else:
+            return self.__draw_contour(image, contour, channels)
+        
+    def __draw_contour(self, image: np.array, contour: np.array, channels: int = 3):
+        """
+        __draw_contour Draw contour on the required image.
+
+        Args:
+            image (np.array): Image.
+            contour (np.array): cv2.contuor array with all points of the contour
+            channels (int): number of color channels of the image.
+        """
+
+        if channels == 3:
+            cv2.drawContours(image, contour, -1, (255,0,0), 3)
+        elif channels == 1:
+            cv2.drawContours(image, contour, -1, 255, 3)
+        return image
     
     def get_left_image(self, image: np.array):
         return image[:, 0:int(image.shape[1] / 2), :]
