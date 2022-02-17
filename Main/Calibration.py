@@ -10,9 +10,10 @@ from scipy import ndimage
 from Video import Video_operations
 
 class Calibration:
-    def __init__(self, video_operations: Video_operations):
+    def __init__(self, video_operations: Video_operations, stereo: bool = True):
         self.timer = 3
         self.count_down = 3
+        self.timer_finished = False
         self.GMM_Image = np.zeros((400, 400))
         self.video_operations = video_operations
         self.roi = None
@@ -22,7 +23,7 @@ class Calibration:
         self.image_shape = None
         self.calibrate_state = 0
         self.capture_state = 0
-        self.stereo = True
+        self.stereo = stereo
         self.crop_empty_frame_gray = None
         self.tol = 0
         self.timing_thread = None
@@ -60,6 +61,11 @@ class Calibration:
         elif state == 2:
             return self.gmm_train(self.GMM_Image, Save_model=False)
         elif state == 3:
+            if self.timer_finished is True:
+                self.timer_finished = False
+                self.calibrate_state = 4
+            return self.gmm_result_figure
+        elif state == 4:
             return self.__preview_calibrated_segmentation(image)
 
     
@@ -84,16 +90,16 @@ class Calibration:
             list: cv2.contuor array with all points of the contour
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.roi = [zero_image.shape[0] - 320, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
+        self.roi = [zero_image.shape[0] - 320, zero_image.shape[0] - 100, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         crop_shape = cropPrev.shape
-        handExample = cv2.imread('handExample.jpeg')
+        handExample = cv2.imread('Full_hand.jpeg')
         handExample = cv2.resize(handExample, (crop_shape[1], crop_shape[0]))
         handExampleGray = cv2.cvtColor(handExample, cv2.COLOR_BGR2GRAY)
         zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = 255 - handExampleGray
         ret, mask = cv2.threshold(zero_image, 127, 255, cv2.THRESH_BINARY)
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        self.hand_contour = contours[1]
+        self.hand_contour = contours[0]
         return self.hand_contour
     
     def __create_hand_mask(self):
@@ -112,6 +118,7 @@ class Calibration:
         for i in range(self.timer):
             time.sleep(1)
             self.count_down -= 1
+        self.timer_finished = True
 
     def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
         
@@ -194,6 +201,10 @@ class Calibration:
 
         self.gmm_result_figure = self.video_operations.image_concat(left_image, right_image)
         self.calibrate_state = 3
+        self.timer_finished = False
+        self.timer = 10
+        self.timing_thread = threading.Thread(target=self.__timer_sec)
+        self.timing_thread.start()
         
         return self.gmm_result_figure
         
@@ -288,16 +299,16 @@ class Calibration:
 if __name__ == "__main__":
     
     video = Video_operations()
-    cal = Calibration(video)
+    cal = Calibration(video, False)
     
-    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
-    capture = video.open_gstreamer_video_capture(flip=False)
-    # capture = video.open_pc_video_capture(1)
-    video.start_thread_record_view_send(capture, cal.GMM_calibrate, True)
+    # gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
+    # capture = video.open_gstreamer_video_capture(flip=False)
+    capture = video.open_pc_video_capture(0, flip=True, stereo=False)
+    video.start_thread_record_view_send(capture, cal.GMM_calibrate, write=False)
     # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
     # video.close_gstreamer_video_capture()
-    # video.close_pc_video_capture()
+    video.close_pc_video_capture()
 
     
     

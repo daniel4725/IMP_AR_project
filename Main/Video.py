@@ -21,6 +21,7 @@ class Video_operations:
         self.frame_queue = Queue()
         self.fps = None
         self.flip = False
+        self.stereo = True
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", resolution: tuple = (1280,360)):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, resolution, True)
@@ -48,9 +49,10 @@ class Video_operations:
         if self.gstreamer_capture is not None:
             self.gstreamer_capture.release()
             
-    def open_pc_video_capture(self, port_num: int, flip: bool = False):
+    def open_pc_video_capture(self, port_num: int, flip: bool = False, stereo: bool = True):
         self.pc_capture = cv2.VideoCapture(port_num)
         self.flip = flip
+        self.stereo = stereo
         if not self.pc_capture.isOpened():
             print('VideoCapture not opened')
             exit(0)
@@ -91,35 +93,6 @@ class Video_operations:
   
         cv2.destroyAllWindows()
         
-    def view_and_send_video(self, video_capture, video_writer, func):
-        self.fps = video_capture.get(cv2.CAP_PROP_FPS)
-        print(self.fps)
-
-        while True:
-             
-            ret, frame = video_capture.read()
-
-            if not ret:
-                print('empty frame')
-                break
-            
-            # self.frame_counter += 1
-            # if (self.frame_counter % 2) == 0:
-            #     left_frame = self.get_left_image(frame)
-            #     right_frame = self.get_right_image(frame)
-            #     left_frame = func(left_frame)
-            #     right_frame = func(right_frame)
-            #     frame = self.image_concat(left_frame, right_frame)
-            
-            video_writer.write(frame)
-            cv2.imshow('Video', frame)
-
-            key = cv2.waitKey(int(500 / self.fps))
-            if key == ord('q'):
-                break
-  
-        cv2.destroyAllWindows()
-    
     def start_thread_record_view_send(self, capture, func, write: bool = True):
         record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture,))
         view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,write))
@@ -148,14 +121,18 @@ class Video_operations:
              
             frame = self.frame_queue.get()
             
-            left_frame = self.get_left_image(frame)
-            right_frame = self.get_right_image(frame)
-            if self.flip:
-                left_frame = cv2.flip(left_frame, 1)
-                right_frame = cv2.flip(right_frame, 1)
-            frame = self.image_concat(left_frame, right_frame)
+            if self.stereo == True:
+                left_frame = self.get_left_image(frame)
+                right_frame = self.get_right_image(frame)
+                if self.flip:
+                    left_frame = cv2.flip(left_frame, 1)
+                    right_frame = cv2.flip(right_frame, 1)
+                frame = self.image_concat(left_frame, right_frame)
+            else:
+                if self.flip:
+                    frame = cv2.flip(frame, 1)
+                    
             frame = func(frame)
-            # time.sleep(0.08) # delay 
             
             self.ready_to_read = True
             if write == True:
