@@ -37,22 +37,24 @@ def draw_contour(image: np.array, contour: np.array):
     
 
 def test_function(frame):
-    import cv2
-    cv2.putText(frame, "test", (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    contour = hand_contour(frame)
-    draw_contour(frame, contour)
+    # import cv2
+    # cv2.putText(frame, "test", (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
+    # contour = hand_contour(frame)
+    # draw_contour(frame, contour)
     return frame
 
 
 def main():
     video = Video_operations()
     
-    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.144")
-    gstreamer_capture = video.open_gstreamer_video_capture(flip=True)
-    video.start_thread_record_view_send(test_function)
+    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
+    capture = video.open_gstreamer_video_capture(flip=False)
+    # capture = video.open_pc_video_capture(1)
+    video.start_thread_record_view_send(capture, test_function, True)
     # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
-    video.close_gstreamer_video_capture()
+    # video.close_gstreamer_video_capture()
+    # video.close_pc_video_capture()
     
     
     

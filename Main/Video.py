@@ -22,8 +22,8 @@ class Video_operations:
         self.fps = None
         self.flip = False
     
-    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
-        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, (1280,360), True)
+    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", resolution: tuple = (1280,360)):
+        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, resolution, True)
 
         if not self.gstreamer_writer.isOpened():
             print('VideoWriter not opened')
@@ -47,6 +47,19 @@ class Video_operations:
     def close_gstreamer_video_capture(self):
         if self.gstreamer_capture is not None:
             self.gstreamer_capture.release()
+            
+    def open_pc_video_capture(self, port_num: int, flip: bool = False):
+        self.pc_capture = cv2.VideoCapture(port_num)
+        self.flip = flip
+        if not self.pc_capture.isOpened():
+            print('VideoCapture not opened')
+            exit(0)
+        
+        return self.pc_capture
+    
+    def close_pc_video_capture(self, port_num: int, flip: bool = False):
+        if self.pc_capture is not None:
+            self.pc_capture.release()
             
     def open_video_capture_from_path(self, path: str):
         self.video_capture_from_path = cv2.VideoWriter(path)
@@ -107,19 +120,19 @@ class Video_operations:
   
         cv2.destroyAllWindows()
     
-    def start_thread_record_view_send(self, func):
-        record_thread = threading.Thread(target=self.__thread_record_from_camera)
-        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,))
+    def start_thread_record_view_send(self, capture, func, write: bool = True):
+        record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture,))
+        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,write))
         record_thread.start()
         view_and_send_thread.start()
         record_thread.join()
         view_and_send_thread.join()
         
-    def __thread_record_from_camera(self):
+    def __thread_record_from_camera(self , captrue):
         while True:
              
-            ret, frame = self.gstreamer_capture.read()
-            self.fps = self.gstreamer_capture.get(cv2.CAP_PROP_FPS)
+            ret, frame = captrue.read()
+            self.fps = captrue.get(cv2.CAP_PROP_FPS)
 
             if not ret:
                 print('empty frame')
@@ -129,7 +142,7 @@ class Video_operations:
                 self.ready_to_read = False
                 self.frame_queue.put(frame)
     
-    def __view_thread_video_and_send_video(self, func):
+    def __view_thread_video_and_send_video(self,func, write: bool = True):
         
         while True:
              
@@ -145,7 +158,8 @@ class Video_operations:
             # time.sleep(0.08) # delay 
             
             self.ready_to_read = True
-            self.gstreamer_writer.write(frame)
+            if write == True:
+                self.gstreamer_writer.write(frame)
             cv2.imshow('Video', frame)
 
             key = cv2.waitKey(10)
@@ -291,9 +305,9 @@ class Video_operations:
         resized_image_g = cv2.resize(image[:,:,1], (shape[1], shape[0]))
         resized_image_b = cv2.resize(image[:,:,2], (shape[1], shape[0]))
         
-        new_image[:,:,2] = resized_image_r
+        new_image[:,:,0] = resized_image_r
         new_image[:,:,1] = resized_image_g
-        new_image[:,:,0] = resized_image_b
+        new_image[:,:,2] = resized_image_b
         
         return new_image    
 if __name__ == "__main__":

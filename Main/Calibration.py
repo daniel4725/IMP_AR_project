@@ -2,13 +2,12 @@ import cv2
 import threading
 import numpy as np
 from sklearn.mixture import GaussianMixture
+from matplotlib import colors
 import time
 import pickle
 import matplotlib.pyplot as plt
 from scipy import ndimage
-import os
 from Video import Video_operations
-import multiprocessing
 
 class Calibration:
     def __init__(self, video_operations: Video_operations):
@@ -18,7 +17,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 4
+        self.components_number = 3
         self.hand_contour = None
         self.image_shape = None
         self.calibrate_state = 0
@@ -30,6 +29,16 @@ class Calibration:
         self.capture_image = None
         self.gmm_result_figure = None
         self.data = None
+        self.label_to_color = {
+            0: self.__color_to_vec("black"),
+            1: self.__color_to_vec("tab:blue"),
+            2: self.__color_to_vec("tab:orange"),
+            3: self.__color_to_vec("tab:green"),
+            4: self.__color_to_vec("tab:red"),
+            5: self.__color_to_vec("tab:purple"),
+            6: self.__color_to_vec("tab:brown"),
+            7: self.__color_to_vec("tab:pink"),
+        }
         
         
 
@@ -51,7 +60,7 @@ class Calibration:
         elif state == 2:
             return self.gmm_train(self.GMM_Image, Save_model=False)
         elif state == 3:
-            return self.gmm_result_figure
+            return self.__preview_calibrated_segmentation(image)
 
     
     def __get_image_from_camera_shape(self, image: np.array):
@@ -75,7 +84,7 @@ class Calibration:
             list: cv2.contuor array with all points of the contour
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.roi = [zero_image.shape[0] - 340, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
+        self.roi = [zero_image.shape[0] - 320, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         crop_shape = cropPrev.shape
         handExample = cv2.imread('handExample.jpeg')
@@ -84,9 +93,8 @@ class Calibration:
         zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = 255 - handExampleGray
         ret, mask = cv2.threshold(zero_image, 127, 255, cv2.THRESH_BINARY)
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        self.hand_contour = contours[0]
+        self.hand_contour = contours[1]
         return self.hand_contour
-    
     
     def __create_hand_mask(self):
         """
@@ -166,7 +174,7 @@ class Calibration:
         self.GMM_Model.fit(data)
         GMM_Labels = self.GMM_Model.predict(data)
         
-        segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1])
+        segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1]).astype(np.uint8)
         
         self.__get_most_valued_gmm_labels(segmented_labels)
         segmented = self.__get_two_comp_segmentation(segmented_labels)
@@ -200,25 +208,22 @@ class Calibration:
         final_image = np.concatenate([first_line_image, second_line_image], axis=0)
         self.data = cv2.resize(final_image, (segmented_labels.shape[1],segmented_labels.shape[0]))
     
+    def __print_lables_by_color_name(self, label_list: list):
+        print("Choosen colors: ")
+        for label in label_list:
+            print((self.label_to_color[label+1])[1])
+    
     def __convert_lables_to_rgb_image(self, labled_image: np.array):
-        label_to_color = {
-            0: [0,     0,   0],
-            1: [255,  87,  51],
-            2: [ 66, 255,  51],
-            3: [ 51,  79, 255],
-            4: [255, 249,  51],
-            5: [246,  51, 255],
-            6: [244, 180,  60],
-            7: [171, 81,  237]
-        }
-
         h, w = labled_image.shape
         img_rgb = np.zeros((h, w, 3), dtype=np.uint8)
 
-        for gray, rgb in label_to_color.items():
-            img_rgb[labled_image == gray, :] = rgb
+        for gray, rgb in self.label_to_color.items():
+            img_rgb[labled_image == gray, :] = rgb[0]
         
         return img_rgb        
+    
+    def __color_to_vec(self, color: str):
+        return (tuple([int(255*x) for x in colors.to_rgb(color)]), color)
         
     def __count_labels(self, prediction: np.array):
         unique, counts = np.unique(prediction, return_counts=True)
@@ -230,7 +235,6 @@ class Calibration:
         for i in range(len(keys)-1):
             if sorted_dic[keys[i]] > (0.25)*sorted_dic[keys[-1]]:
                 label_list.append(keys[i] - 1)
-        print(label_list)
         return label_list
     
     def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array):
@@ -243,7 +247,25 @@ class Calibration:
         bad_label_list = self.__count_labels(self.invert_crop_by_mask_segmented_labels)
         # self.two_comp_label_list =  self.__remove_bad_labels(good_label_list, bad_label_list)
         self.two_comp_label_list =  good_label_list
-        print(self.two_comp_label_list)
+        self.__print_lables_by_color_name(self.two_comp_label_list)
+        
+    def __preview_calibrated_segmentation(self, image: np.array):
+        Shape = image.shape
+        imageLAB = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+
+        L = np.array(imageLAB[:, :, 0]).flatten()
+        a = np.array(imageLAB[:, :, 1]).flatten()
+        b = np.array(imageLAB[:, :, 2]).flatten()
+        data = np.array([a, b]).transpose()
+        
+        GMM_Labels = self.GMM_Model.predict(data)
+        
+        segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1]).astype(np.uint8)
+        
+        segmented = self.__get_two_comp_segmentation(segmented_labels)
+        
+        return self.__convert_lables_to_rgb_image(segmented)
+
     
     def __remove_bad_labels(self, main_list: list, second_list: list):
         if (len(main_list) == 1):
@@ -268,12 +290,15 @@ if __name__ == "__main__":
     video = Video_operations()
     cal = Calibration(video)
     
-    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.144")
-    gstreamer_capture = video.open_gstreamer_video_capture(flip=True)
-    video.start_thread_record_view_send(cal.GMM_calibrate)
+    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
+    capture = video.open_gstreamer_video_capture(flip=False)
+    # capture = video.open_pc_video_capture(1)
+    video.start_thread_record_view_send(capture, cal.GMM_calibrate, True)
     # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
-    video.close_gstreamer_video_capture()
+    # video.close_gstreamer_video_capture()
+    # video.close_pc_video_capture()
+
     
     
 
