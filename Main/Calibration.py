@@ -9,6 +9,22 @@ import matplotlib.pyplot as plt
 from scipy import ndimage
 from Video import Video_operations
 
+from aux_functions import *
+from table_handling import CornersFollower
+from functools import wraps
+from time import time
+
+
+def measure(func):
+    @wraps(func)
+    def _time_it(*args, **kwargs):
+        start = int(round(time() * 1000))
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end_ = int(round(time() * 1000)) - start
+            print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
+    return _time_it
 
 class Calibration:
     def __init__(self, video_operations: Video_operations, stereo: bool = True):
@@ -21,8 +37,7 @@ class Calibration:
         self.GMM_Model = None
         self.components_number = 4
         self.hand_contour = None
-        self.image_shape = None
-        self.calibrate_state = 0
+        self.image_shape = None 
         self.capture_state = 0
         self.stereo = stereo
         self.crop_empty_frame_gray = None
@@ -42,19 +57,26 @@ class Calibration:
             7: self.__color_to_vec("tab:pink"),
         }
         self.calibration_state_names = {
-            "get_image_shape" : 0,
-            "capture_hands" : 1,
-            "gmm_train" : 2,
-            "preview_results" : 3,
-            "check_segmentation" : 4,
-            "finish_calibration" : 5
+            "calibrate_table" : 0,
+            "get_image_shape" : 1,
+            "capture_hands" : 2,
+            "gmm_train" : 3,
+            "preview_results" : 4,
+            "check_segmentation" : 5,
+            "finish_calibration" : 6
         }
+        self.calibrate_state = self.calibration_state_names["calibrate_table"]
         
     def GMM_calibrate(self, image: np.array):
         return self.__State_machine(image, self.calibrate_state, self.stereo)
         
     def __State_machine(self, image: np.array, state: int, stereo: bool = False):
-        if state == 0:
+        
+        if state == self.calibration_state_names["calibrate_table"]:
+            self.__calibrate_table(image)
+            self.calibrate_state = self.calibration_state_names["finish_calibration"]
+            return image
+        elif state == self.calibration_state_names["get_image_shape"]:
             if stereo is True:
                 self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
             else:
@@ -76,6 +98,13 @@ class Calibration:
             return self.__check_if_segmentation_is_good(image)
         elif state == self.calibration_state_names["finish_calibration"]:
             return image
+    
+    @measure
+    def __calibrate_table(self, image: np.array): 
+        im_l = self.video_operations.get_left_image(image)
+        im_r = self.video_operations.get_right_image(image)
+        self.corner_follower_l = CornersFollower(im_l, show=True, name="c_follow_l")  # Create the corner follower for left image
+        self.corner_follower_r = CornersFollower(im_r, show=True, name="c_follow_r")  # Create the corner follower for right image
     
     def __get_image_from_camera_shape(self, image: np.array):
         """
@@ -323,12 +352,14 @@ if __name__ == "__main__":
     
     # gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
     # capture = video.open_gstreamer_video_capture(flip=False)
-    capture = video.open_pc_video_capture(0, flip=True, stereo=False)
+    capture = video.open_video_capture_from_path("regular_video.mp4", stereo=True)
+    # capture = video.open_pc_video_capture(0, flip=True, stereo=False)
     video.start_thread_record_view_send(capture, cal.GMM_calibrate, write=False)
     # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
     # video.close_gstreamer_video_capture()
-    video.close_pc_video_capture()
+    # video.close_pc_video_capture()
+    video.close
 
     
     

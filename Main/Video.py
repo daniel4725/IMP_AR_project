@@ -63,13 +63,18 @@ class Video_operations:
         if self.pc_capture is not None:
             self.pc_capture.release()
             
-    def open_video_capture_from_path(self, path: str):
-        self.video_capture_from_path = cv2.VideoWriter(path)
-
+    def close_video_capture_from_path(self, port_num: int, flip: bool = False):
+        if self.video_capture_from_path is not None:
+            self.video_capture_from_path.release()
+            
+    def open_video_capture_from_path(self, path: str, flip: bool = False, stereo: bool = True):
+        self.video_capture_from_path = cv2.VideoCapture(path)
+        self.flip = flip
+        self.stereo = stereo
         if not self.video_capture_from_path.isOpened():
             print('VideoCapture not opened')
             exit(0)
-            
+        
         return self.video_capture_from_path
     
     def view_video(self, video_capture):
