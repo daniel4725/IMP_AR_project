@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy import ndimage
 from Video import Video_operations
 
+
 class Calibration:
     def __init__(self, video_operations: Video_operations, stereo: bool = True):
         self.timer = 3
@@ -18,7 +19,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 3
+        self.components_number = 4
         self.hand_contour = None
         self.image_shape = None
         self.calibrate_state = 0
@@ -40,34 +41,41 @@ class Calibration:
             6: self.__color_to_vec("tab:brown"),
             7: self.__color_to_vec("tab:pink"),
         }
+        self.calibration_state_names = {
+            "get_image_shape" : 0,
+            "capture_hands" : 1,
+            "gmm_train" : 2,
+            "preview_results" : 3,
+            "check_segmentation" : 4,
+            "finish_calibration" : 5
+        }
         
-        
-
     def GMM_calibrate(self, image: np.array):
         return self.__State_machine(image, self.calibrate_state, self.stereo)
         
-    
     def __State_machine(self, image: np.array, state: int, stereo: bool = False):
         if state == 0:
-            if stereo == True:
+            if stereo is True:
                 self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
             else:
                 self.__get_image_from_camera_shape(image)
-            self.__create_hand_mask()    
-            self.calibrate_state = 1
+            self.mask = self.__create_hand_mask(self.__create_hand_contour())
+            self.sleeve_mask = self.__create_hand_mask(self.sleeve_contour)    
+            self.calibrate_state = self.calibration_state_names["capture_hands"]
             return image
-        elif state == 1:
+        elif state == self.calibration_state_names["capture_hands"]:
             return self.capture_hand(image, True, self.stereo)
-        elif state == 2:
+        elif state == self.calibration_state_names["gmm_train"]:
             return self.gmm_train(self.GMM_Image, Save_model=False)
-        elif state == 3:
+        elif state == self.calibration_state_names["preview_results"]:
             if self.timer_finished is True:
                 self.timer_finished = False
-                self.calibrate_state = 4
+                self.calibrate_state = self.calibration_state_names["check_segmentation"]
             return self.gmm_result_figure
-        elif state == 4:
-            return self.__preview_calibrated_segmentation(image)
-
+        elif state == self.calibration_state_names["check_segmentation"]:
+            return self.__check_if_segmentation_is_good(image)
+        elif state == self.calibration_state_names["finish_calibration"]:
+            return image
     
     def __get_image_from_camera_shape(self, image: np.array):
         """
@@ -90,7 +98,7 @@ class Calibration:
             list: cv2.contuor array with all points of the contour
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.roi = [zero_image.shape[0] - 320, zero_image.shape[0] - 100, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
+        self.roi = [round(zero_image.shape[0] * 0.2), round(zero_image.shape[0] * 0.8), round(zero_image.shape[1] * 0.6), round(zero_image.shape[1] * 0.9)]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         crop_shape = cropPrev.shape
         handExample = cv2.imread('Full_hand.jpeg')
@@ -99,20 +107,21 @@ class Calibration:
         zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = 255 - handExampleGray
         ret, mask = cv2.threshold(zero_image, 127, 255, cv2.THRESH_BINARY)
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        self.hand_contour = contours[0]
+        self.hand_contour = contours[1]
+        self.sleeve_contour = contours[0]
         return self.hand_contour
     
-    def __create_hand_mask(self):
+    def __create_hand_mask(self, contour):
         """
         __create_hand_mask Create mask of hand in the shape of full image from camera.
 
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.video_operations.draw_contour_two_image_or_one(zero_image, self.__create_hand_contour(), channels=1, stereo=False)
-
+        self.video_operations.draw_contour_two_image_or_one(zero_image, contour, channels=1, stereo=False)
+        
         img_fill_holes = ndimage.binary_fill_holes(zero_image).astype(np.uint8)
-        self.mask = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        return self.mask
+        mask = cv2.normalize(img_fill_holes, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
+        return mask
 
     def __timer_sec(self):
         for i in range(self.timer):
@@ -120,6 +129,16 @@ class Calibration:
             self.count_down -= 1
         self.timer_finished = True
 
+    def __check_if_segmentation_is_good(self, image: np.array):
+        self.video_operations.draw_text_two_image_or_one(image, "Is the segmentation good (see only palm)?", (0, 50))
+        self.video_operations.draw_text_two_image_or_one(image, "Press Y/N", (0, 100))
+        key = cv2.waitKey(30)
+        if key == 121: # key == Y
+            self.calibrate_state = self.calibration_state_names["finish_calibration"]
+        elif key == 110: # key == N
+            self.calibrate_state = self.calibration_state_names["capture_hands"]
+        return self.__preview_calibrated_segmentation(image)
+    
     def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
         
         if self.capture_state == 0:
@@ -132,10 +151,12 @@ class Calibration:
             numPixels = self.crop_empty_frame_gray.shape[0] * self.crop_empty_frame_gray.shape[1]
             self.tol = numPixels / 10
             change = 0
+            self.timer = 3
+            self.count_down = 3
             self.timing_thread = threading.Thread(target=self.__timer_sec)
             self.capture_state = 1
         elif self.capture_state == 1:
-            if stereo == True:
+            if stereo is True:
                 self.capture_image = self.video_operations.get_left_image(image)
             else:
                 self.capture_image = image
@@ -151,22 +172,25 @@ class Calibration:
                 self.capture_state = 2
                 self.timing_thread.start()
             self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+            self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
         elif self.capture_state == 2:
             if self.count_down != 0:
                 self.video_operations.draw_text_two_image_or_one(image, str(self.count_down), (0, 50), stereo)
                 self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+                self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
             elif self.count_down == 0:
                 if stereo == True:
-                    self.GMM_Image = np.array(self.video_operations.get_left_image(image) , copy=True)
+                    self.GMM_Image = np.array(self.video_operations.get_left_image(image), copy=True)
                 else:
                     self.GMM_Image = np.array(image , copy=True)
                 self.video_operations.draw_text_two_image_or_one(image, "Image Saved", (0, 50), stereo)
                 self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
+                self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
                 self.capture_state = 0
-                self.calibrate_state = 2
+                self.calibrate_state = self.calibration_state_names["gmm_train"]
                 self.timing_thread.join()
         return image
-
+        
     def gmm_train(self, GMM_image: np.array, Save_model: bool = True):
         Shape = GMM_image.shape
         imageLAB = cv2.cvtColor(GMM_image, cv2.COLOR_BGR2LAB)
@@ -183,8 +207,9 @@ class Calibration:
         
         segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1]).astype(np.uint8)
         
-        self.__get_most_valued_gmm_labels(segmented_labels)
-        segmented = self.__get_two_comp_segmentation(segmented_labels)
+        self.two_comp_label_list_hand = self.__get_most_valued_gmm_labels(segmented_labels, self.mask)
+        self.two_comp_label_list_sleeve = self.__get_most_valued_gmm_labels(segmented_labels, self.sleeve_mask)
+        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_sleeve)
 
         if (Save_model):
             # save the model to disk
@@ -195,12 +220,10 @@ class Calibration:
 
         self.__create_multiple_image((segmented_labels+1), GMM_image, segmented)
         left_image = self.video_operations.image_resize(self.data, 0.7)
-        self.video_operations.draw_text_two_image_or_one(left_image, "Is the segmentation good?", (0, 50))
         right_image = self.video_operations.image_resize(self.data, 0.7)
-        self.video_operations.draw_text_two_image_or_one(right_image, "Is the segmentation good?", (0, 50))
 
         self.gmm_result_figure = self.video_operations.image_concat(left_image, right_image)
-        self.calibrate_state = 3
+        self.calibrate_state = self.calibrate_state = self.calibration_state_names["preview_results"]
         self.timer_finished = False
         self.timer = 10
         self.timing_thread = threading.Thread(target=self.__timer_sec)
@@ -248,8 +271,8 @@ class Calibration:
                 label_list.append(keys[i] - 1)
         return label_list
     
-    def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array):
-        ret, mask = cv2.threshold(self.mask, 10, 255, cv2.THRESH_BINARY)
+    def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array, contour_mask):
+        ret, mask = cv2.threshold(contour_mask, 10, 255, cv2.THRESH_BINARY)
         mask_inv = cv2.bitwise_not(mask)
         img = n_comp_segmented_img + 1
         self.crop_by_mask_segmented_labels = cv2.bitwise_and(img, img, mask = mask)
@@ -257,8 +280,8 @@ class Calibration:
         good_label_list = self.__count_labels(self.crop_by_mask_segmented_labels)
         bad_label_list = self.__count_labels(self.invert_crop_by_mask_segmented_labels)
         # self.two_comp_label_list =  self.__remove_bad_labels(good_label_list, bad_label_list)
-        self.two_comp_label_list =  good_label_list
-        self.__print_lables_by_color_name(self.two_comp_label_list)
+        self.__print_lables_by_color_name(good_label_list)
+        return good_label_list
         
     def __preview_calibrated_segmentation(self, image: np.array):
         Shape = image.shape
@@ -273,11 +296,10 @@ class Calibration:
         
         segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1]).astype(np.uint8)
         
-        segmented = self.__get_two_comp_segmentation(segmented_labels)
+        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_sleeve)
         
         return self.__convert_lables_to_rgb_image(segmented)
 
-    
     def __remove_bad_labels(self, main_list: list, second_list: list):
         if (len(main_list) == 1):
             return main_list
@@ -289,13 +311,11 @@ class Calibration:
                     pass
             return main_list
     
-    def __get_two_comp_segmentation(self, n_comp_segmented_img: np.array):
+    def __get_two_comp_segmentation(self, n_comp_segmented_img: np.array, two_comp_label_list):
         reduced_GMM_Labels_segmented_img = np.zeros(n_comp_segmented_img.shape)
-        reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, self.two_comp_label_list)] = 1
+        reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, two_comp_label_list)] = 1
         return reduced_GMM_Labels_segmented_img
     
-
-
 if __name__ == "__main__":
     
     video = Video_operations()

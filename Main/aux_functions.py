@@ -3,8 +3,91 @@ import numpy as np
 from skimage.measure import label, regionprops
 import math
 from scipy.spatial import ConvexHull
+from scipy import stats
 import time
 import matplotlib.pyplot as plt
+
+
+def get_corners_with_lin_reg(points):
+    tmp_lines = points
+    outliers_thresh = 1
+    new_table_corners = np.zeros((4, 2), dtype=np.int)
+    lines_m_b = np.zeros((4, 2))
+
+    points_lst = []
+    for i, line in enumerate(tmp_lines):
+        z_score = np.abs(stats.zscore(line))  # dropping outliers  # TODO what the function does?? (the z score)
+        no_outliers = line[(z_score < outliers_thresh).all(axis=1), :]
+        # print(f"{len(no_outliers)/line.shape[0]}")
+        # if len(no_outliers)/line.shape[0] < 0.40:  # if there are a lot of outliers takes the former corners
+        #     print(f"dropped points: no outliers - {len(no_outliers)/line.shape[0]}")
+        #     points_lst.append(self.current_corners[i])
+        #     # points_lst.append(no_outliers)
+        # else:
+        points_lst.append(no_outliers)
+        try:
+            m, b = np.polyfit(no_outliers[:, 0], no_outliers[:, 1], 1)  # fits a line
+        except:
+            m = b = 0  # line is vertical
+        lines_m_b[i, :] = np.array((m, b))
+
+    for i in range(4):
+        m1, b1 = lines_m_b[i]
+        m2, b2 = lines_m_b[(i + 1) % 4]
+
+        if abs(m1 - m2) < 10 ** -8:
+            # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
+            print('\x1b[0;30;41m' + "LinReg: something went wrong... the lines are paralel" + '\x1b[0m')
+            return 0
+
+        y = ((m1 * b2 - b1 * m2) / (m1 - m2)).round()
+        x = ((b2 - b1) / (m1 - m2)).round()
+        new_table_corners[i, :] = np.array([x, y])
+
+    return new_table_corners.astype(np.int)
+
+
+def get_corners_with_hough(side_edges):
+    # TODO doc
+    # TODO add inputs, and optimize thresholds and function parameters
+    hough_rho = 1
+    hough_theta = (np.pi / 180) * 1
+    hough_thresh = 50
+    # TODO maby change the points?? + 1000??
+
+    lines = np.zeros((4, 2))
+    corners = np.zeros((4, 2))
+    for i, side_edge in enumerate(side_edges):
+        hlines = cv2.HoughLines(image=side_edge, rho=hough_rho, theta=hough_theta, threshold=hough_thresh)
+        rho, theta = hlines[0, 0]
+        a = np.cos(theta)
+        b = np.sin(theta)
+        x0 = a * rho
+        y0 = b * rho
+        x1 = (x0 + 100 * (-b))
+        y1 = (y0 + 100 * (a))
+        x2 = (x0 - 100 * (-b))
+        y2 = (y0 - 100 * (a))
+        try:
+            m, b = np.polyfit([x1, x2], [y1, y2], 1)  # fits a line
+        except:
+            m = b = 0  # line is vertical
+        lines[i, :] = np.array((m, b))
+
+    for i in range(4):
+        m1, b1 = lines[i]
+        m2, b2 = lines[(i + 1) % 4]
+
+        if abs(m1 - m2) < 10 ** -8:
+            # https://stackoverflow.com/questions/287871/how-to-print-colored-text-to-the-terminal
+            print('\x1b[0;30;41m' + "Hough: something went wrong... the lines are paralel" + '\x1b[0m')
+            return 0
+
+        y = ((m1 * b2 - b1 * m2) / (m1 - m2)).round()
+        x = ((b2 - b1) / (m1 - m2)).round()
+        corners[i, :] = np.array([x, y])
+
+    return corners.astype(np.int)
 
 
 def projective_points_tform(tform_mat, points, inverse=False):
@@ -50,6 +133,7 @@ def getLargestCC(segmentation):
     return largestCC
 
 
+# TODO not in use//?
 def getCC_labels_by_size(segmentation):
     labels = label(segmentation)
     assert(labels.max() != 0)  # assume at least 1 CC   TODO use try may be???
@@ -107,18 +191,24 @@ def touching_indexes(table_d_map, hands_d_map, tolerance=2, show=False):
     :param hands_d_map: hands distances map
     :param tolerance: the distance (approximately and in cm) that is considered a touch
     :param show: if True, plots the touches mask
-    :return: the centroid of each touch
+    :return: the closest index of each touch
     """
     touch_idxs = np.zeros((0, 2), dtype='int')
     distances = abs(hands_d_map - table_d_map)
     touch_mask = (distances < tolerance) * (hands_d_map > 0)
     if show:
         cv2.imshow("touch_mask", touch_mask.astype('uint8') * 255)
-    label_img = label(touch_mask)  # label all the different touches
-    regions = regionprops(label_img)  # properties of all touches
-    for props in regions:
-        y, x = props.centroid
-        touch_idxs = np.append(touch_idxs, np.array([[x, y]], dtype='int'), axis=0)
+    if touch_mask.any():
+        largest_touch = getLargestCC(touch_mask)
+        temp = distances * largest_touch
+        temp[temp == 0] = tolerance
+        closest_touch = np.unravel_index(np.argmin(temp, axis=None), temp.shape)
+        touch_idxs = np.array([[closest_touch[1], closest_touch[0]]], dtype='int')
+    # label_img = label(touch_mask)  # label all the different touches
+    # regions = regionprops(label_img)  # properties of all touches
+    # for props in regions:
+    #     y, x = props.centroid
+    #     touch_idxs = np.append(touch_idxs, np.array([[x, y]], dtype='int'), axis=0)
     return touch_idxs
 
 
@@ -152,6 +242,31 @@ class ImageDistorter:
         return np.concatenate([dst_l, dst_r], axis=1)
 
 
+class CountDown:
+    def __init__(self):
+        self.counter = 0
+        self.start_time = 0
+        self.starts_from = 0
+
+    def start_countdown(self, num_of_sec):
+        self.counter = num_of_sec + 1
+        self.starts_from = num_of_sec + 1
+        self.start_time = time.time()
+
+    def check(self):
+        self.counter = int(self.starts_from - (time.time() - self.start_time))
+        if self.counter <= 0:
+            self.counter = 0
+        return self.counter
+
 if __name__ == "__main__":
     print("Hi, im aux_functions")
+    countdown_clk = CountDown()
+    countdown_clk.start_countdown(8)
+    while 1:
+        time.sleep(0.2)
+        print(f'\rcounting down: {countdown_clk.check()}', end="")
+        if countdown_clk.check() == 0:
+            break
+    print("\rdone")
 
