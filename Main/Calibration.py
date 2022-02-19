@@ -8,6 +8,7 @@ import pickle
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from Video import Video_operations
+import os
 
 from aux_functions import *
 from table_handling import CornersFollower
@@ -59,14 +60,16 @@ class Calibration:
         self.calibration_state_names = {
             "look_at_table"      : 0,
             "calibrate_table"    : 1,
-            "get_image_shape"    : 2,
-            "capture_hands"      : 3,
-            "gmm_train"          : 4,
-            "preview_results"    : 5,
-            "check_segmentation" : 6,
-            "finish_calibration" : 7
+            "preview_corners"    : 2,
+            "get_image_shape"    : 3,
+            "capture_hands"      : 4,
+            "gmm_train"          : 5,
+            "preview_results"    : 6,
+            "check_segmentation" : 7,
+            "finish_calibration" : 8
         }
         self.calibrate_state = self.calibration_state_names["look_at_table"]
+        self.__create_output_directory()
         
     def GMM_calibrate(self, image: np.array):
         return self.__State_machine(image, self.calibrate_state, self.stereo)
@@ -83,8 +86,17 @@ class Calibration:
             return self.__look_at_table(image)
         elif state == self.calibration_state_names["calibrate_table"]:
             self.__calibrate_table(image, True)
-            self.calibrate_state = self.calibration_state_names["finish_calibration"]
-            return image
+            self.calibrate_state = self.calibration_state_names["preview_corners"]
+            return self.__preview_corners(image)
+        elif state == self.calibration_state_names["preview_corners"]:
+            if self.timer_started is False:
+                self.timer = 10
+                self.timing_thread = threading.Thread(target=self.__timer_sec)
+                self.timing_thread.start()
+            if self.timer_finished is True:
+                self.timer_finished = False
+                self.calibrate_state = self.calibration_state_names["get_image_shape"]
+            return self.corner_result_image
         elif state == self.calibration_state_names["get_image_shape"]:
             if stereo is True:
                 self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
@@ -97,7 +109,7 @@ class Calibration:
         elif state == self.calibration_state_names["capture_hands"]:
             return self.capture_hand(image, True, self.stereo)
         elif state == self.calibration_state_names["gmm_train"]:
-            return self.gmm_train(self.GMM_Image, Save_model=False)
+            return self.gmm_train(self.GMM_Image, Save_model=True)
         elif state == self.calibration_state_names["preview_results"]:
             if self.timer_finished is True:
                 self.timer_finished = False
@@ -108,12 +120,26 @@ class Calibration:
         elif state == self.calibration_state_names["finish_calibration"]:
             return image
     
+    def __create_output_directory(self):
+        self.main_directory = os.path.dirname(os.path.abspath(__file__))
+        self.output_directory_path = os.path.join(self.main_directory, "calibration_output")
+        if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")) is False:
+            os.mkdir(self.output_directory_path)
+    
     def __look_at_table(self, image: np.array):
         self.video_operations.draw_text_two_image_or_one(image, "Look at the table please", (0, 50))
         self.video_operations.draw_text_two_image_or_one(image, f"{self.count_down}", (0, 100))
         return image
 
-    def __preview_corners(self, image: np.array)
+    def __preview_corners(self, image: np.array):
+        im_l = self.video_operations.get_left_image(image)
+        im_r = self.video_operations.get_right_image(image)
+        for i, (p1, p2) in enumerate(zip(self.corner_follower_l.current_corners, np.roll(self.corner_follower_l.current_corners, shift=1, axis=0))):
+            cv2.line(im_l, tuple(p1), tuple(p2), 255)
+        for i, (p1, p2) in enumerate(zip(self.corner_follower_r.current_corners, np.roll(self.corner_follower_r.current_corners, shift=1, axis=0))):
+            cv2.line(im_r, tuple(p1), tuple(p2), 255)
+        self.corner_result_image = self.video_operations.image_concat(im_l, im_r)
+        return self.corner_result_image
     
     @measure
     def __calibrate_table(self, image: np.array, Save_model:bool = False): 
@@ -124,9 +150,9 @@ class Calibration:
         if (Save_model):
             # save the model to disk
             filename = 'corner_follower_l.sav'
-            pickle.dump(self.corner_follower_l, open(filename, 'wb'))
+            pickle.dump(self.corner_follower_l, open(os.path.join(self.output_directory_path, filename), 'wb'))
             filename = 'corner_follower_r.sav'
-            pickle.dump(self.corner_follower_r, open(filename, 'wb'))
+            pickle.dump(self.corner_follower_r, open(os.path.join(self.output_directory_path, filename), 'wb'))
     
     def __get_image_from_camera_shape(self, image: np.array):
         """
@@ -262,14 +288,16 @@ class Calibration:
         
         self.two_comp_label_list_hand = self.__get_most_valued_gmm_labels(segmented_labels, self.mask)
         self.two_comp_label_list_sleeve = self.__get_most_valued_gmm_labels(segmented_labels, self.sleeve_mask)
-        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_sleeve)
+        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_hand)
 
         if (Save_model):
             # save the model to disk
             filename = 'hand_gmm_model.sav'
-            pickle.dump(self.GMM_Model, open(filename, 'wb'))
+            pickle.dump(self.GMM_Model, open(os.path.join(self.output_directory_path, filename), 'wb'))
             filename = 'hand_best_labels.sav'
-            pickle.dump(self.two_comp_label_list, open(filename, 'wb'))
+            pickle.dump(self.two_comp_label_list_hand, open(os.path.join(self.output_directory_path, filename), 'wb'))
+            filename = 'hand_sleeve_labels.sav'
+            pickle.dump(self.two_comp_label_list_sleeve, open(os.path.join(self.output_directory_path, filename), 'wb'))
 
         self.__create_multiple_image((segmented_labels + 1), GMM_image, segmented)
         left_image = self.video_operations.image_resize(self.data, 0.7)
@@ -349,7 +377,7 @@ class Calibration:
         
         segmented_labels = np.array(GMM_Labels).reshape(Shape[0], Shape[1]).astype(np.uint8)
         
-        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_sleeve)
+        segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_hand)
         
         return self.__convert_lables_to_rgb_image(segmented)
 

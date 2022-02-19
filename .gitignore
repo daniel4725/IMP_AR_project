@@ -3,5 +3,8 @@ venv/
 ML/preview
 __pycache__/
 *.mp4
-corner_follower_l.sav
-corner_follower_r.sav
+Main/calibration_output/corner_follower_l.sav
+Main/calibration_output/corner_follower_r.sav
+Main/calibration_output/hand_best_labels.sav
+Main/calibration_output/hand_gmm_model.sav
+Main/calibration_output/hand_sleeve_labels.sav
