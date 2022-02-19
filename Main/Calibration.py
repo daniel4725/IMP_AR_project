@@ -12,17 +12,16 @@ from Video import Video_operations
 from aux_functions import *
 from table_handling import CornersFollower
 from functools import wraps
-from time import time
 
 
 def measure(func):
     @wraps(func)
     def _time_it(*args, **kwargs):
-        start = int(round(time() * 1000))
+        start = int(round(time.time() * 1000))
         try:
             return func(*args, **kwargs)
         finally:
-            end_ = int(round(time() * 1000)) - start
+            end_ = int(round(time.time() * 1000)) - start
             print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
     return _time_it
 
@@ -30,6 +29,7 @@ class Calibration:
     def __init__(self, video_operations: Video_operations, stereo: bool = True):
         self.timer = 3
         self.count_down = 3
+        self.timer_started = False
         self.timer_finished = False
         self.GMM_Image = np.zeros((400, 400))
         self.video_operations = video_operations
@@ -57,23 +57,32 @@ class Calibration:
             7: self.__color_to_vec("tab:pink"),
         }
         self.calibration_state_names = {
-            "calibrate_table" : 0,
-            "get_image_shape" : 1,
-            "capture_hands" : 2,
-            "gmm_train" : 3,
-            "preview_results" : 4,
-            "check_segmentation" : 5,
-            "finish_calibration" : 6
+            "look_at_table"      : 0,
+            "calibrate_table"    : 1,
+            "get_image_shape"    : 2,
+            "capture_hands"      : 3,
+            "gmm_train"          : 4,
+            "preview_results"    : 5,
+            "check_segmentation" : 6,
+            "finish_calibration" : 7
         }
-        self.calibrate_state = self.calibration_state_names["calibrate_table"]
+        self.calibrate_state = self.calibration_state_names["look_at_table"]
         
     def GMM_calibrate(self, image: np.array):
         return self.__State_machine(image, self.calibrate_state, self.stereo)
         
     def __State_machine(self, image: np.array, state: int, stereo: bool = False):
         
-        if state == self.calibration_state_names["calibrate_table"]:
-            self.__calibrate_table(image)
+        if state == self.calibration_state_names["look_at_table"]:
+            if self.timer_started is False:
+                self.timing_thread = threading.Thread(target=self.__timer_sec)
+                self.timing_thread.start()
+            if self.timer_finished is True:
+                self.timer_finished = False
+                self.calibrate_state = self.calibration_state_names["calibrate_table"]
+            return self.__look_at_table(image)
+        elif state == self.calibration_state_names["calibrate_table"]:
+            self.__calibrate_table(image, True)
             self.calibrate_state = self.calibration_state_names["finish_calibration"]
             return image
         elif state == self.calibration_state_names["get_image_shape"]:
@@ -99,12 +108,25 @@ class Calibration:
         elif state == self.calibration_state_names["finish_calibration"]:
             return image
     
+    def __look_at_table(self, image: np.array):
+        self.video_operations.draw_text_two_image_or_one(image, "Look at the table please", (0, 50))
+        self.video_operations.draw_text_two_image_or_one(image, f"{self.count_down}", (0, 100))
+        return image
+
+    def __preview_corners(self, image: np.array)
+    
     @measure
-    def __calibrate_table(self, image: np.array): 
+    def __calibrate_table(self, image: np.array, Save_model:bool = False): 
         im_l = self.video_operations.get_left_image(image)
         im_r = self.video_operations.get_right_image(image)
         self.corner_follower_l = CornersFollower(im_l, show=True, name="c_follow_l")  # Create the corner follower for left image
         self.corner_follower_r = CornersFollower(im_r, show=True, name="c_follow_r")  # Create the corner follower for right image
+        if (Save_model):
+            # save the model to disk
+            filename = 'corner_follower_l.sav'
+            pickle.dump(self.corner_follower_l, open(filename, 'wb'))
+            filename = 'corner_follower_r.sav'
+            pickle.dump(self.corner_follower_r, open(filename, 'wb'))
     
     def __get_image_from_camera_shape(self, image: np.array):
         """
@@ -153,10 +175,12 @@ class Calibration:
         return mask
 
     def __timer_sec(self):
+        self.timer_started = True
         for i in range(self.timer):
             time.sleep(1)
             self.count_down -= 1
         self.timer_finished = True
+        self.timer_started = False
 
     def __check_if_segmentation_is_good(self, image: np.array):
         self.video_operations.draw_text_two_image_or_one(image, "Is the segmentation good (see only palm)?", (0, 50))
@@ -171,7 +195,7 @@ class Calibration:
     def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
         
         if self.capture_state == 0:
-            if stereo == True:
+            if stereo is True:
                 capture_image = self.video_operations.get_left_image(image)
             else:
                 capture_image = image
@@ -208,10 +232,10 @@ class Calibration:
                 self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
                 self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
             elif self.count_down == 0:
-                if stereo == True:
+                if stereo is True:
                     self.GMM_Image = np.array(self.video_operations.get_left_image(image), copy=True)
                 else:
-                    self.GMM_Image = np.array(image , copy=True)
+                    self.GMM_Image = np.array(image, copy=True)
                 self.video_operations.draw_text_two_image_or_one(image, "Image Saved", (0, 50), stereo)
                 self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
                 self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
@@ -247,7 +271,7 @@ class Calibration:
             filename = 'hand_best_labels.sav'
             pickle.dump(self.two_comp_label_list, open(filename, 'wb'))
 
-        self.__create_multiple_image((segmented_labels+1), GMM_image, segmented)
+        self.__create_multiple_image((segmented_labels + 1), GMM_image, segmented)
         left_image = self.video_operations.image_resize(self.data, 0.7)
         right_image = self.video_operations.image_resize(self.data, 0.7)
 
@@ -274,7 +298,7 @@ class Calibration:
     def __print_lables_by_color_name(self, label_list: list):
         print("Choosen colors: ")
         for label in label_list:
-            print((self.label_to_color[label+1])[1])
+            print((self.label_to_color[label + 1])[1])
     
     def __convert_lables_to_rgb_image(self, labled_image: np.array):
         h, w = labled_image.shape
@@ -348,18 +372,18 @@ class Calibration:
 if __name__ == "__main__":
     
     video = Video_operations()
-    cal = Calibration(video, False)
+    cal = Calibration(video, True)
     
     # gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
-    # capture = video.open_gstreamer_video_capture(flip=False)
-    capture = video.open_video_capture_from_path("regular_video.mp4", stereo=True)
+    capture = video.open_gstreamer_video_capture(flip=False)
+    # capture = video.open_video_capture_from_path("regular_video.mp4", stereo=True)
     # capture = video.open_pc_video_capture(0, flip=True, stereo=False)
     video.start_thread_record_view_send(capture, cal.GMM_calibrate, write=False)
     # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
     video.close_gstreamer_video_writer()
-    # video.close_gstreamer_video_capture()
+    video.close_gstreamer_video_capture()
     # video.close_pc_video_capture()
-    video.close
+    # video.close_video_capture_from_path()
 
     
     

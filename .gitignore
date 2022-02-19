@@ -3,3 +3,5 @@ venv/
 ML/preview
 __pycache__/
 *.mp4
+corner_follower_l.sav
+corner_follower_r.sav

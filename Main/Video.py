@@ -140,9 +140,11 @@ class Video_operations:
             frame = func(frame)
             
             self.ready_to_read = True
-            if write == True:
+            if write is True:
                 self.gstreamer_writer.write(frame)
+            cv2.namedWindow('Video', cv2.WINDOW_KEEPRATIO)
             cv2.imshow('Video', frame)
+            cv2.resizeWindow('Video', 1280*2, 320*2)
 
             key = cv2.waitKey(10)
             if key == ord('q'):
