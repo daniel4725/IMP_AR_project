@@ -22,6 +22,7 @@ class Video_operations:
         self.fps = None
         self.flip = False
         self.stereo = True
+        self.finish_calibration = False
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", resolution: tuple = (1280,360)):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, resolution, True)
@@ -137,7 +138,7 @@ class Video_operations:
                 if self.flip:
                     frame = cv2.flip(frame, 1)
                     
-            frame = func(frame)
+            frame , self.finish_calibration = func(frame)
             
             self.ready_to_read = True
             if write is True:

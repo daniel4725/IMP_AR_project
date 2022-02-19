@@ -42,7 +42,6 @@ class TabletApp:
         self.x, self.width = left_up_corner[0], map.shape[1]
         self.y, self.height = left_up_corner[1], map.shape[0]
         self.touchscreen = TouchScreen()
-        # self.screenshoter = d3dshot.create(capture_output="numpy")
         self.region = (self.x, self.y, self.x + self.width, self.y + self.height)
 
         tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
@@ -50,10 +49,6 @@ class TabletApp:
         win32gui.MoveWindow(self.hwnd, 0, 0, 1000, 1000, True)
 
         # self.region = win32gui.GetWindowRect(self.hwnd)
-
-    def get_whole_map(self):
-        # read the screenshot and convert to cv2 BGR
-        return cv2.cvtColor(self.screenshoter.screenshot(region=self.region), cv2.COLOR_RGB2BGR)
 
     def update(self, touch_idx, real_mouse_clicks=True):
         clicked_before = self.touchscreen.clicked
@@ -81,7 +76,6 @@ class PaintApp:
         self.x, self.width = left_up_corner[0], map.shape[1]
         self.y, self.height = left_up_corner[1], map.shape[0]
         self.touchscreen = TouchScreen()
-        # self.screenshoter = d3dshot.create(capture_output="numpy")
         self.region = (self.x, self.y, self.x + self.width, self.y + self.height)
         self.delete_state = False
 
@@ -101,10 +95,6 @@ class PaintApp:
 
         self.colors_dict = {"red": (None, None), "blue": (None, None), "green": (None, None),
                             "yellow": (None, None)}
-
-    def get_whole_map(self):
-        # read the screenshot and convert to cv2 BGR
-        return cv2.cvtColor(self.screenshoter.screenshot(region=self.region), cv2.COLOR_RGB2BGR)
 
     def update(self, touch_idx, real_mouse_clicks=True):
         clicked_before = self.touchscreen.clicked
@@ -152,6 +142,9 @@ class PaintApp:
         mouse.move(x, y, duration=self.duration)
         mouse.click("left")
 
+    def exit_draw(self):
+        pass   # TODO
+
     def change_color(self, color):
         print("change_color"); return
 
@@ -160,6 +153,15 @@ class PaintApp:
 
 
 class Application:
+    PAINT = 1
+    TABLET = 2
+    INSERT_SHAPE = 3
+    DELETE = 4
+    EXIT_DELETE = 5
+    CHANGE_COLOR = 6
+    DRAW = 7
+    EXIT_DRAW = 8
+
     def __init__(self, map):
         self.none_map = map.copy()
         corners = [(0, 0), (map.shape[1], 0), (map.shape[1], map.shape[0]), (0, map.shape[0])]
@@ -174,13 +176,15 @@ class Application:
 
         self.paint_app = PaintApp(map)
         self.tablet = TabletApp(map)
+        # self.screenshoter = d3dshot.create(capture_output="numpy")
         self.running_app = None
+        self.enable_touch = False
 
     def run(self, app_name):
-        if app_name == 'paint':
+        if app_name == self.PAINT:
             self.running_app = self.paint_app
             self.running_app.move_to_front()
-        elif app_name == 'tablet':
+        elif app_name == self.TABLET:
             self.running_app = self.tablet
             self.running_app.move_to_front()
 
@@ -191,29 +195,31 @@ class Application:
         if self.running_app is None:
             return self.none_map
         else:
-            map = self.running_app.get_whole_map()
+            map = cv2.cvtColor(self.screenshoter.screenshot(region=self.running_app.region), cv2.COLOR_RGB2BGR)
             map[self.none_map != 0] = self.none_map[self.none_map != 0]
             return map
 
-    def update_touches(self, touch_idx, real_mouse_clicks=True):
+    def update_touches(self, touch_idx):
         if self.running_app is None:
             return
         else:
-            self.running_app.update(touch_idx, real_mouse_clicks)
+            self.running_app.update(touch_idx, self.enable_touch)
 
-    def change_paint_state(self, state, arg=1):
+    def change_paint_state(self, operation, arg=1):
         if not isinstance(self.running_app, PaintApp):
             print('\x1b[0;30;41m' + "change_paint_state in application  went wrong!!" + '\x1b[0m')
             assert()
-        if state == 'insert_shape':
+        if operation == self.INSERT_SHAPE:
             self.paint_app.insert_shape(arg)
-        if state == 'insert_draw':
+        if operation == self.DRAW:
             self.paint_app.insert_draw()
-        if state == 'change_color':
+        if operation == self.EXIT_DRAW:
+            self.paint_app.exit_draw()
+        if operation == self.CHANGE_COLOR:
             self.paint_app.change_color(arg)
-        if state == 'delete':
+        if operation == self.DELETE:
             self.paint_app.delete_state = True
-        if state == 'exit_delete':
+        if operation == self.EXIT_DELETE:
             self.paint_app.delete_state = False
 
 if __name__ == "__main__":

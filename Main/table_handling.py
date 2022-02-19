@@ -25,7 +25,7 @@ class TableMap:
         self.map_points = np.array([[0, 0], [t_map.shape[1], 0], [t_map.shape[1], t_map.shape[0]], [0, t_map.shape[0]]])
 
     def project_map2real(self, im_l, im_r, mask_l, mask_r, application, real_touch_idxs=np.zeros((0, 2)),
-                         use_mouse_clicks=False, touch_indicator=False, show_touch=False):
+                         touch_indicator=False, show_touch=False):
         im_r_lst = [im_r]
         project_map_2_im_r = threading.Thread(target=self.project2right_img_thread, args=(im_r_lst, mask_r))
         project_map_2_im_r.start()  # thread for transforming the right image the right image
@@ -40,7 +40,7 @@ class TableMap:
         else:
             map_touch_idxs = real_touch_idxs
 
-        application.update_touches(map_touch_idxs, real_mouse_clicks=use_mouse_clicks)
+        application.update_touches(map_touch_idxs)
 
         if show_touch:
             touch_map = self.map.copy()

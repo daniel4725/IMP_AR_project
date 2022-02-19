@@ -2,11 +2,15 @@
 from multiprocessing import Process
 
 from Video import Video_operations
+from Calibration import Calibration
+from ClassAR import AR
 import cv2
 import numpy as np
 
 from functools import wraps
 from time import time
+
+
 
 def measure(func):
     @wraps(func)
@@ -19,46 +23,48 @@ def measure(func):
             print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
     return _time_it
 
-def hand_contour(image: np.array):
-        zero_image = np.zeros((image.shape[0],image.shape[1])).astype(np.uint8)
-        roi = [zero_image.shape[0] - 340, zero_image.shape[0] - 120, zero_image.shape[1] - 240, zero_image.shape[1] - 20]  # [y_start, y_end, x_start, x_end]
-        cropPrev = zero_image[roi[0]:roi[1], roi[2]:roi[3]]
-        crop_shape = cropPrev.shape
-        handExample = cv2.imread('handExample.jpeg')
-        handExample = cv2.resize(handExample, (crop_shape[1], crop_shape[0]))
-        handExampleGray = cv2.cvtColor(handExample, cv2.COLOR_BGR2GRAY)
-        zero_image[roi[0]:roi[1], roi[2]:roi[3]] = 255 - handExampleGray
-        ret, mask = cv2.threshold(zero_image, 127, 255, cv2.THRESH_BINARY)
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        return contours[0]
-
-def draw_contour(image: np.array, contour: np.array):
-    cv2.drawContours(image, contour, -1, (255,0,0), 3)
-    
-
-def test_function(frame):
-    # import cv2
-    # cv2.putText(frame, "test", (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2, cv2.LINE_AA)
-    # contour = hand_contour(frame)
-    # draw_contour(frame, contour)
-    return frame
 
 
-def main():
-    video = Video_operations()
+class Main():
+    def __init__(self):
+        self.state = 0   
     
-    gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
-    capture = video.open_gstreamer_video_capture(flip=False)
-    # capture = video.open_pc_video_capture(1)
-    video.start_thread_record_view_send(capture, test_function, True)
-    # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
-    video.close_gstreamer_video_writer()
-    # video.close_gstreamer_video_capture()
-    # video.close_pc_video_capture()
+    def main(self):
+        self.video = Video_operations()
+        
+        gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
+        capture = self.video.open_gstreamer_video_capture(flip=False)
+        # capture = video.open_pc_video_capture(1)
+        self.video.start_thread_record_view_send(capture, self.main_state_machine, True)
+        # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
+        self.video.close_gstreamer_video_writer()
+        self.video.close_gstreamer_video_capture()
+        # video.close_pc_video_capture()    
     
-    
+    def main_state_machine(self, frame: np.array):
+        if self.state == 0:
+            self.cal = Calibration(self.video, True)
+            self.state = 1
+            return (frame, False)
+        elif self.state == 1:
+            frame , ret = self.cal.GMM_calibrate(frame)
+            if self.video.finish_calibration is True:
+                self.state = 2
+            return (frame, ret)
+        elif self.state == 2:
+            im_l = self.video.get_left_image(frame)
+            im_r = self.video.get_right_image(frame)
+            self.aug_real = AR(im_l, im_r)
+            self.state = 3
+            return (frame, False)
+        elif self.state == 3:
+            im_l = self.video.get_left_image(frame)
+            im_r = self.video.get_right_image(frame)
+            im_l, im_r = self.aug_real.get_AR(im_l, im_r)  # TODO remove the masks
+            return (self.video.image_concat(im_l, im_r), False)
     
 if __name__ == "__main__":
-    main()
+    main = Main()
+    main.main()
     
     

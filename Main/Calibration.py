@@ -70,9 +70,10 @@ class Calibration:
         }
         self.calibrate_state = self.calibration_state_names["look_at_table"]
         self.__create_output_directory()
+        self.finish_calibration = False
         
     def GMM_calibrate(self, image: np.array):
-        return self.__State_machine(image, self.calibrate_state, self.stereo)
+        return (self.__State_machine(image, self.calibrate_state, self.stereo), self.finish_calibration)
         
     def __State_machine(self, image: np.array, state: int, stereo: bool = False):
         
@@ -118,6 +119,7 @@ class Calibration:
         elif state == self.calibration_state_names["check_segmentation"]:
             return self.__check_if_segmentation_is_good(image)
         elif state == self.calibration_state_names["finish_calibration"]:
+            self.finish_calibration = True
             return image
     
     def __create_output_directory(self):
@@ -230,8 +232,8 @@ class Calibration:
             numPixels = self.crop_empty_frame_gray.shape[0] * self.crop_empty_frame_gray.shape[1]
             self.tol = numPixels / 10
             change = 0
-            self.timer = 3
-            self.count_down = 3
+            self.timer = 10
+            self.count_down = 10
             self.timing_thread = threading.Thread(target=self.__timer_sec)
             self.capture_state = 1
         elif self.capture_state == 1:
