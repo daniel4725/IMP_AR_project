@@ -1,7 +1,8 @@
 import os
 import sys
 
-os.add_dll_directory(r'C:\opencv43\bin')
+os.add_dll_directory(r'C:\opencv45\bin')
+os.add_dll_directory(r'C:\opencv45\lib')
 os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\bin')
 os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0')
 os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib')

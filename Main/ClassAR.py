@@ -69,12 +69,15 @@ class AR:
         self.mask_l = None
         self.mask_r = None
 
-        # TODO DELETE AND CHANGE
-        self.mr = 9  # TODO delete!! also from func
-
     def get_hand_r_seg(self):
-        self.mr = self.hand_operations.get_hand_mask(self.im_r)
+        self.mask_r = self.hand_operations.get_hand_mask(self.im_r)
         # TODO change to mask_r
+
+    # def get_sleeve_r_seg(self):
+    #     self.sleeve_r = self.hand_operations.get_hand_mask(self.im_r)
+    #
+    # def get_sleeve_l_seg(self):
+    #     self.sleeve_l = self.hand_operations.get_hand_mask(self.im_r)
 
     def renew_seg_right(self, scale):
         self.re_corners_r, self.re_seg_img_r = get_table_corners(self.im_r, scale=scale)  # TODO scale?
@@ -150,9 +153,9 @@ class AR:
         #  using im_l and im_r extracting mask_l and mask_r
         hand_seg_r_thread = threading.Thread(target=self.get_hand_r_seg)
         hand_seg_r_thread.start()
-        ml = self.hand_operations.get_hand_mask(im_l)
+        self.mask_l = self.hand_operations.get_hand_mask(im_l)
         hand_seg_r_thread.join()
-        cv2.imshow("makim", np.concatenate([ml, self.mr], axis=1))
+        cv2.imshow("makim", np.concatenate([self.mask_l, self.mask_r], axis=1))
         # mask_l, mask_r = hand_operations.get_hand_mask(im_l), hand_operations.get_hand_mask(im_r)
 
         # ---------------------- state machine and distances map (hands and table) calculations --------------------
@@ -183,7 +186,7 @@ class AR:
         # TODO ------------------------ here:  -------------------------------
         #  after doing stuff - project the map to the table
         # ---------------- estimating the transform and projecting the map to the real table  ------------------
-        im_l, im_r = self.table_map.project_map2real(im_l, im_r, mask_l, mask_r, application=self.application,
+        im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, self.mask_l, self.mask_r, application=self.application,
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
         self.state_machine.add_text(im_l)

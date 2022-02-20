@@ -2,8 +2,9 @@ import cv2
 import numpy as np
 import pyautogui
 import mouse
-# import d3dshot
 import win32gui
+from PIL import ImageGrab
+
 
 toplist, winlist = [], []
 def enum_cb(hwnd, results):
@@ -171,14 +172,14 @@ class Application:
             color = (1, 1, 1)
             thickness = 15
             cv2.line(self.none_map, start_point, end_point, color, thickness)
-            cv2.line(self.none_map, start_point, end_point, (170, 0, 170), 4 * thickness//5)
+            cv2.line(self.none_map, start_point, end_point, (170, 1, 170), 4 * thickness//5)
             cv2.line(self.none_map, start_point, end_point, color, thickness//5)
 
         self.paint_app = PaintApp(map)
         self.tablet = TabletApp(map)
-        # self.screenshoter = d3dshot.create(capture_output="numpy")
         self.running_app = None
         self.enable_touch = False
+        self.allow_clicks = True
 
     def run(self, app_name):
         if app_name == self.PAINT:
@@ -195,7 +196,8 @@ class Application:
         if self.running_app is None:
             return self.none_map
         else:
-            map = cv2.cvtColor(self.screenshoter.screenshot(region=self.running_app.region), cv2.COLOR_RGB2BGR)
+            map = ImageGrab.grab(self.running_app.region)
+            map = cv2.cvtColor(np.array(map), cv2.COLOR_RGB2BGR)
             map[self.none_map != 0] = self.none_map[self.none_map != 0]
             return map
 
@@ -203,7 +205,7 @@ class Application:
         if self.running_app is None:
             return
         else:
-            self.running_app.update(touch_idx, self.enable_touch)
+            self.running_app.update(touch_idx, self.enable_touch and self.allow_clicks)
 
     def change_paint_state(self, operation, arg=1):
         if not isinstance(self.running_app, PaintApp):

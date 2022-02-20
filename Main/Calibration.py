@@ -36,7 +36,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 4
+        self.components_number = 5
         self.hand_contour = None
         self.image_shape = None 
         self.capture_state = 0
@@ -68,7 +68,7 @@ class Calibration:
             "check_segmentation" : 7,
             "finish_calibration" : 8
         }
-        self.calibrate_state = self.calibration_state_names["look_at_table"]
+        self.calibrate_state = self.calibration_state_names["get_image_shape"]
         self.__create_output_directory()
         self.finish_calibration = False
         
@@ -114,10 +114,15 @@ class Calibration:
         elif state == self.calibration_state_names["capture_hands"]:
             return self.capture_hand(image, True, self.stereo)
         elif state == self.calibration_state_names["gmm_train"]:
-            return self.gmm_train(self.GMM_Image, Save_model=True)
+            return self.gmm_train(self.GMM_Image, Save_model=False)
         elif state == self.calibration_state_names["preview_results"]:
+            if self.timer_started is False:
+                self.timer = 40
+                self.timing_thread = threading.Thread(target=self.__timer_sec)
+                self.timing_thread.start()
             if self.timer_finished is True:
                 self.timer_finished = False
+                self.timing_thread.join()
                 self.calibrate_state = self.calibration_state_names["check_segmentation"]
             return self.gmm_result_figure
         elif state == self.calibration_state_names["check_segmentation"]:
@@ -184,7 +189,7 @@ class Calibration:
         self.roi = [round(zero_image.shape[0] * 0.2), round(zero_image.shape[0] * 0.8), round(zero_image.shape[1] * 0.6), round(zero_image.shape[1] * 0.9)]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         crop_shape = cropPrev.shape
-        handExample = cv2.imread('Full_hand.jpeg')
+        handExample = cv2.imread(os.path.join(self.main_directory, 'Full_hand.jpeg'))
         handExample = cv2.resize(handExample, (crop_shape[1], crop_shape[0]))
         handExampleGray = cv2.cvtColor(handExample, cv2.COLOR_BGR2GRAY)
         zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]] = 255 - handExampleGray

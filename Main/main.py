@@ -27,7 +27,7 @@ def measure(func):
 
 class Main():
     def __init__(self):
-        self.state = 0   
+        self.state = 2   
     
     def main(self):
         self.video = Video_operations()

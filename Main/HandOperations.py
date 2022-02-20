@@ -12,7 +12,7 @@ class HandOperations:
         self.image = None
         self.mask = None
         self.numfingers = None
-        directory = "calibration_output"
+        directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")
 
         with open(os.path.join(directory, 'bovw_90_new_circle.pkl'), 'rb') as pickle_file:
             self.kmeans, self.scale, self.svm, self.im_features, self.train_labels, self.no_clusters = pickle.load(pickle_file)

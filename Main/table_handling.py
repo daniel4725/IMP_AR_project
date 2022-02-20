@@ -19,6 +19,7 @@ class TableMap:
         self.img_shape = shape
 
         t_map = create_table_map(corners_l, corners_r, shape, map_dense=map_dense)
+        t_map = np.zeros([400, 400, 3], dtype="uint8")  # TODO delete line!!!!!!!!!!!!!!!
         self.map = t_map
         self.whole_map = np.zeros(shape, dtype='uint8')
         self.map_shape = self.map.shape
@@ -112,8 +113,8 @@ class TableMap:
             if err > 30:  # TODO is good parameter??
                 # err needs to be less than around 25 or more
                 self.bad_corners_distances_lst[self.bad_corners_idx] = 1
-                if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
-                    return former_dist_map, False
+                # if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
+                #     return former_dist_map, False
                 return former_dist_map, True
             # the distances make sense
             self.bad_corners_distances_lst[self.bad_corners_idx] = 0
@@ -447,6 +448,12 @@ class CornersFollower:
             cv2.imshow(self.name+": renewed lines and corners", cpy)
 
         return self.current_corners, changed
+
+    def show_lines(self, img):
+        img = img.copy()
+        for i, (p1, p2) in enumerate(zip(self.current_corners, np.roll(self.current_corners, shift=1, axis=0))):
+            img = cv2.line(img, tuple(p1), tuple(p2), self.colors[i], 5)
+        cv2.imshow(self.name + " lines", img)
 
 
 if __name__ == "__main__":
