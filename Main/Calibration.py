@@ -79,10 +79,13 @@ class Calibration:
         
         if state == self.calibration_state_names["look_at_table"]:
             if self.timer_started is False:
+                self.timer = 5
+                self.count_down = 5
                 self.timing_thread = threading.Thread(target=self.__timer_sec)
                 self.timing_thread.start()
             if self.timer_finished is True:
                 self.timer_finished = False
+                self.timing_thread.join()
                 self.calibrate_state = self.calibration_state_names["calibrate_table"]
             return self.__look_at_table(image)
         elif state == self.calibration_state_names["calibrate_table"]:
@@ -96,6 +99,7 @@ class Calibration:
                 self.timing_thread.start()
             if self.timer_finished is True:
                 self.timer_finished = False
+                self.timing_thread.join()
                 self.calibrate_state = self.calibration_state_names["get_image_shape"]
             return self.corner_result_image
         elif state == self.calibration_state_names["get_image_shape"]:
