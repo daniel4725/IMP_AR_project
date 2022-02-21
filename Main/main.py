@@ -7,22 +7,6 @@ from ClassAR import AR
 import cv2
 import numpy as np
 
-from functools import wraps
-from time import time
-
-
-
-def measure(func):
-    @wraps(func)
-    def _time_it(*args, **kwargs):
-        start = int(round(time() * 1000))
-        try:
-            return func(*args, **kwargs)
-        finally:
-            end_ = int(round(time() * 1000)) - start
-            print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
-    return _time_it
-
 
 
 class Main():
@@ -31,14 +15,16 @@ class Main():
     
     def main(self):
         self.video = Video_operations()
-        
+
+        self.video.open_mp4_video_writer()
         gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.169")
         capture = self.video.open_gstreamer_video_capture(flip=False)
         # capture = video.open_pc_video_capture(1)
-        self.video.start_thread_record_view_send(capture, self.main_state_machine, True)
+        self.video.start_thread_record_view_send(capture, self.main_state_machine, write=True, Save_video=True)
         # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
         self.video.close_gstreamer_video_writer()
         self.video.close_gstreamer_video_capture()
+        self.video.close_mp4_video_writer()
         # video.close_pc_video_capture()    
     
     def main_state_machine(self, frame: np.array):
@@ -47,7 +33,7 @@ class Main():
             self.state = 1
             return (frame, False)
         elif self.state == 1:
-            frame , ret = self.cal.GMM_calibrate(frame)
+            frame, ret = self.cal.GMM_calibrate(frame, Save_model=False)
             if self.video.finish_calibration is True:
                 self.state = 2
             return (frame, ret)

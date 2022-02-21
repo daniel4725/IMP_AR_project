@@ -58,51 +58,23 @@ class Calibration:
             7: self.__color_to_vec("tab:pink"),
         }
         self.calibration_state_names = {
-            "look_at_table"      : 0,
-            "calibrate_table"    : 1,
-            "preview_corners"    : 2,
-            "get_image_shape"    : 3,
-            "capture_hands"      : 4,
-            "gmm_train"          : 5,
-            "preview_results"    : 6,
-            "check_segmentation" : 7,
-            "finish_calibration" : 8
+            "get_image_shape"    : 0,
+            "capture_hands"      : 1,
+            "gmm_train"          : 2,
+            "preview_results"    : 3,
+            "check_segmentation" : 4,
+            "finish_calibration" : 5
         }
         self.calibrate_state = self.calibration_state_names["get_image_shape"]
         self.__create_output_directory()
         self.finish_calibration = False
         
-    def GMM_calibrate(self, image: np.array):
-        return (self.__State_machine(image, self.calibrate_state, self.stereo), self.finish_calibration)
+    def GMM_calibrate(self, image: np.array, Save_model: bool =False):
+        return (self.__State_machine(image, self.calibrate_state, self.stereo, Save_model), self.finish_calibration)
         
-    def __State_machine(self, image: np.array, state: int, stereo: bool = False):
-        
-        if state == self.calibration_state_names["look_at_table"]:
-            if self.timer_started is False:
-                self.timer = 5
-                self.count_down = 5
-                self.timing_thread = threading.Thread(target=self.__timer_sec)
-                self.timing_thread.start()
-            if self.timer_finished is True:
-                self.timer_finished = False
-                self.timing_thread.join()
-                self.calibrate_state = self.calibration_state_names["calibrate_table"]
-            return self.__look_at_table(image)
-        elif state == self.calibration_state_names["calibrate_table"]:
-            self.__calibrate_table(image, True)
-            self.calibrate_state = self.calibration_state_names["preview_corners"]
-            return self.__preview_corners(image)
-        elif state == self.calibration_state_names["preview_corners"]:
-            if self.timer_started is False:
-                self.timer = 10
-                self.timing_thread = threading.Thread(target=self.__timer_sec)
-                self.timing_thread.start()
-            if self.timer_finished is True:
-                self.timer_finished = False
-                self.timing_thread.join()
-                self.calibrate_state = self.calibration_state_names["get_image_shape"]
-            return self.corner_result_image
-        elif state == self.calibration_state_names["get_image_shape"]:
+    def __State_machine(self, image: np.array, state: int, stereo: bool = False, Save_model: bool =False):
+
+        if state == self.calibration_state_names["get_image_shape"]:
             if stereo is True:
                 self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
             else:
@@ -114,7 +86,7 @@ class Calibration:
         elif state == self.calibration_state_names["capture_hands"]:
             return self.capture_hand(image, True, self.stereo)
         elif state == self.calibration_state_names["gmm_train"]:
-            return self.gmm_train(self.GMM_Image, Save_model=False)
+            return self.gmm_train(self.GMM_Image, Save_model)
         elif state == self.calibration_state_names["preview_results"]:
             if self.timer_started is False:
                 self.timer = 20

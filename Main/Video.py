@@ -1,11 +1,11 @@
 import os
 import sys
 
-os.add_dll_directory(r'C:\opencv45\bin')
-os.add_dll_directory(r'C:\opencv45\lib')
-os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\bin')
-os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0')
-os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib')
+# os.add_dll_directory(r'C:\opencv45\bin')
+# os.add_dll_directory(r'C:\opencv45\lib')
+# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\bin')
+# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0')
+# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib')
 
 import cv2
 import numpy as np 
@@ -25,6 +25,9 @@ class Video_operations:
         self.stereo = True
         self.finish_calibration = False
         self.sending_resolution = (900, 320)
+        self.timer_started = False
+        self.timer_finished = False
+        self.count_down = 20
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
@@ -38,6 +41,17 @@ class Video_operations:
     def close_gstreamer_video_writer(self):
         if self.gstreamer_writer is not None:
             self.gstreamer_writer.release()
+
+    def open_mp4_video_writer(self):
+        self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.mp4_video_writer = cv2.VideoWriter("output_video.mp4", self._fourcc, 15.0, (1280, 320))
+        if not self.mp4_video_writer.isOpened():
+            print('VideoWriter is not opened')
+            exit(0)
+
+    def close_mp4_video_writer(self):
+        if self.mp4_video_writer is not None:
+            self.mp4_video_writer.release()
     
     def open_gstreamer_video_capture(self, flip: bool = False):
         self.gstreamer_capture = cv2.VideoCapture('udpsrc port=5005 caps = "application/x-rtp, media=(string)video, clock-rate=(int)90000, encoding-name=(string)H264, payload=(int)96" ! rtph264depay ! decodebin ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
@@ -47,7 +61,16 @@ class Video_operations:
             exit(0)
         
         return self.gstreamer_capture
-    
+
+    def __timer_sec(self):
+        self.timer_started = True
+        for i in range(self.timer):
+            time.sleep(1)
+            self.count_down -= 1
+            print(self.count_down)
+        self.timer_finished = True
+        self.timer_started = False
+
     def close_gstreamer_video_capture(self):
         if self.gstreamer_capture is not None:
             self.gstreamer_capture.release()
@@ -93,6 +116,7 @@ class Video_operations:
                 print('empty frame')
                 break
 
+
             cv2.imshow('Video', frame)
 
             key = cv2.waitKey(int(500 / fps))
@@ -101,15 +125,20 @@ class Video_operations:
   
         cv2.destroyAllWindows()
         
-    def start_thread_record_view_send(self, capture, func, write: bool = True):
-        record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture,))
-        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func,write))
+    def start_thread_record_view_send(self, capture, func, write: bool = True, Save_video: bool = False):
+        record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture, Save_video))
+        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func, write, Save_video))
+        self.timer = 20
+        timing_thread = threading.Thread(target=self.__timer_sec)
         record_thread.start()
         view_and_send_thread.start()
+        timing_thread.start()
+        timing_thread.join()
         record_thread.join()
         view_and_send_thread.join()
+
         
-    def __thread_record_from_camera(self , captrue):
+    def __thread_record_from_camera(self , captrue, Save_video: bool = False):
         while True:
              
             ret, frame = captrue.read()
@@ -119,11 +148,15 @@ class Video_operations:
                 print('empty frame')
                 break
 
+            if Save_video is True:
+                if self.timer_finished is True:
+                    break
+
             if (self.ready_to_read):
                 self.ready_to_read = False
                 self.frame_queue.put(frame)
     
-    def __view_thread_video_and_send_video(self,func, write: bool = True):
+    def __view_thread_video_and_send_video(self,func, write: bool = True, Save_video: bool = False):
         while True:
 
             frame = self.frame_queue.get()
@@ -144,9 +177,16 @@ class Video_operations:
             print((time.time() - s))
 
             self.ready_to_read = True
+
+            if Save_video is True:
+                self.mp4_video_writer.write(frame)
+                if self.timer_finished is True:
+                    break
+
             if write is True:
                 frame = self.reshspe4phone(frame)
                 self.gstreamer_writer.write(frame)
+
             cv2.namedWindow('Video', cv2.WINDOW_KEEPRATIO)
             cv2.imshow('Video', frame)
             # cv2.resizeWindow('Video', 1280*2, 320*2)
@@ -156,7 +196,7 @@ class Video_operations:
                 break
         cv2.destroyAllWindows()
       
-    def save_and_preview_video_from_other_video(self, func, source: str, destination: str, ):
+    def save_and_preview_video_from_other_video(self, func, source: str, destination: str):
         cap = cv2.VideoCapture(source)
         fps = cap.get(cv2.CAP_PROP_FPS)
         self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')

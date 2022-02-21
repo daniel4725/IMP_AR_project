@@ -33,10 +33,10 @@ def write(im_l, im_r, txt="3D! Hello"):  # TODO delete
 class AR:
     def __init__(self, im_l, im_r, static_cam=False):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")
-        with open(os.path.join(directory, 'corner_follower_l.sav'), 'rb') as handle:
-            self.corner_follower_l = pickle.load(handle)
-        with open(os.path.join(directory, 'corner_follower_r.sav'), 'rb') as handle:
-            self.corner_follower_r = pickle.load(handle)
+        # with open(os.path.join(directory, 'corner_follower_l.sav'), 'rb') as handle:
+        #     self.corner_follower_l = pickle.load(handle)
+        # with open(os.path.join(directory, 'corner_follower_r.sav'), 'rb') as handle:
+        #     self.corner_follower_r = pickle.load(handle)
 
         self.corner_follower_l = CornersFollower(im_l, static_cam=static_cam, show=True,
                                             name="c_follow_l")  # Create the corner follower for left image
@@ -196,7 +196,7 @@ class AR:
         im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, self.mask_l, self.mask_r, application=self.application,
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
-        self.state_machine.add_text(im_l)
+        # self.state_machine.add_text(im_l)
 
         if show_dist_map:
             # show distances map
