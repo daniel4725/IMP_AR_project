@@ -267,7 +267,7 @@ class Application:
         self.tablet = TabletApp(map)
         self.running_app = None
         self.enable_touch = False
-        self.allow_clicks = True
+        self.allow_clicks = False    # TODO make true
 
     def run(self, app_name):
         if app_name == self.PAINT:

@@ -20,7 +20,7 @@ class Main():
         gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.169")
         capture = self.video.open_gstreamer_video_capture(flip=False)
         # capture = video.open_pc_video_capture(1)
-        self.video.start_thread_record_view_send(capture, self.main_state_machine, write=True, Save_video=True)
+        self.video.start_thread_record_view_send(capture, self.main_state_machine, write=True, Save_video=False)
         # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
         self.video.close_gstreamer_video_writer()
         self.video.close_gstreamer_video_capture()

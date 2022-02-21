@@ -67,7 +67,6 @@ class Video_operations:
         for i in range(self.timer):
             time.sleep(1)
             self.count_down -= 1
-            print(self.count_down)
         self.timer_finished = True
         self.timer_started = False
 
@@ -174,7 +173,8 @@ class Video_operations:
 
             s = time.time()
             frame, self.finish_calibration = func(frame)
-            print((time.time() - s))
+            # print((time.time() - s))
+            cv2.imshow("ssss", frame)
 
             self.ready_to_read = True
 
@@ -226,11 +226,12 @@ class Video_operations:
         cv2.destroyAllWindows()
         
     def reshspe4phone(self, frame: np.array):
+        crop_factor = 0.2
         left_frame = self.get_left_image(frame)
         right_frame = self.get_right_image(frame)
         roi = [round(left_frame.shape[0] * 0), round(left_frame.shape[0] * 1),
-                    round(left_frame.shape[1] * 0.20),
-                    round(left_frame.shape[1] * 0.80)]  # [y_start, y_end, x_start, x_end]
+                    round(left_frame.shape[1] * crop_factor),
+                    round(left_frame.shape[1] * (1 - crop_factor))]  # [y_start, y_end, x_start, x_end]
         crop_l = left_frame[roi[0]:roi[1], roi[2]:roi[3]]
         crop_r = right_frame[roi[0]:roi[1], roi[2]:roi[3]]
         mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.05)-3, 3), dtype='uint8')

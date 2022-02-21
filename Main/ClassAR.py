@@ -54,7 +54,7 @@ class AR:
         self.dist_map_hands = None
 
         self.application = Application(self.table_map.map)
-        self.state_machine = StateMachine(self.hand_operations, im_l.shape)
+        self.state_machine = StateMachine(self.hand_operations, im_l.shape, crop_x=int(im_l.shape[1]*0.3))
 
         # corner following fields:
         self.new_corners_r, self.changed_r = np.zeros((4, 2)), False
@@ -114,36 +114,39 @@ class AR:
                 # tracking error - renewed table segmentation is needed
                 self.renew_table_segmentation = True
 
+    def find_table(self):
+        if self.renew_table_segmentation:
+            self.renewing_t_seg = True
+            self.renew_table_segmentation = False
+            self.renew_seg_countdown_clk.start_countdown(self.renew_seg_counter)
+
+        if self.renew_seg_countdown_clk.check() == 0:
+            scale = 2  # TODO scale?
+            renew_seg_r = threading.Thread(target=self.renew_seg_right, args=(scale,))
+            renew_seg_r.start()
+            re_corners_l, re_seg_img_l = get_table_corners(self.im_l, scale=scale, name="renew_l", show=True)
+            renew_seg_r.join()
+            self.corner_follower_l.current_corners, self.table_map.corners_l = re_corners_l, re_corners_l
+            self.corner_follower_r.current_corners, self.table_map.corners_r = self.re_corners_r, self.re_corners_r
+            self.renewing_t_seg = False
+        else:
+            factor = 1.2
+            dim = (int(self.im_l.shape[1] * factor * 0.6), int(self.im_l.shape[0] * factor))
+            resized_l = cv2.resize(self.im_l, dim, interpolation=cv2.INTER_AREA)
+            resized_r = cv2.resize(self.im_r, dim, interpolation=cv2.INTER_AREA)
+            txt = f'SG in: {self.renew_seg_countdown_clk.check()}'
+            write(resized_l, resized_r, txt=txt)
+            out = np.concatenate([resized_l, np.zeros((dim[1], 10, 3), dtype='uint8'), resized_r], axis=1)
+            cv2.imshow('out_stream', out)
+
+
     def get_AR(self, im_l, im_r, show_dist_map=False, renew_table_seg=True):
         s = time.time()
         self.im_l = im_l
         self.im_r = im_r
         # --------- bad table following for some time ----
         if (self.renew_table_segmentation or self.renewing_t_seg) and renew_table_seg:
-            if self.renew_table_segmentation:
-                self.renewing_t_seg = True
-                self.renew_table_segmentation = False
-                self.renew_seg_countdown_clk.start_countdown(self.renew_seg_counter)
-
-            if self.renew_seg_countdown_clk.check() == 0:
-                scale = 2  # TODO scale?
-                renew_seg_r = threading.Thread(target=self.renew_seg_right, args=(scale,))
-                renew_seg_r.start()
-                re_corners_l, re_seg_img_l = get_table_corners(im_l, scale=scale, name="renew_l", show=True)
-                renew_seg_r.join()
-                self.corner_follower_l.current_corners, self.table_map.corners_l = re_corners_l, re_corners_l
-                self.corner_follower_r.current_corners, self.table_map.corners_r = self.re_corners_r, self.re_corners_r
-                self.renewing_t_seg = False
-            else:
-                factor = 1.2
-                dim = (int(im_l.shape[1] * factor * 0.6), int(im_l.shape[0] * factor))
-                resized_l = cv2.resize(im_l, dim, interpolation=cv2.INTER_AREA)
-                resized_r = cv2.resize(im_r, dim, interpolation=cv2.INTER_AREA)
-                txt = f'SG in: {self.renew_seg_countdown_clk.check()}'
-                write(resized_l, resized_r, txt=txt)
-                out = np.concatenate([resized_l, np.zeros((dim[1], 10, 3), dtype='uint8'), resized_r], axis=1)
-                cv2.imshow('out_stream', out)
-                cv2.waitKey(70)  # TODO delete line
+            self.find_table()
             return im_l, im_r
 
         # start a thread that updates the table map using screen shoot
@@ -196,7 +199,9 @@ class AR:
         im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, self.mask_l, self.mask_r, application=self.application,
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
-        # self.state_machine.add_text(im_l)
+        self.state_machine.add_text(im_l, left=True)
+        self.state_machine.add_text(im_r)
+
 
         if show_dist_map:
             # show distances map

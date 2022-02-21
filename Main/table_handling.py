@@ -12,17 +12,38 @@ class TableMap:
 
         self.corners_l = corners_l
         self.corners_r = corners_r
-        self.bad_corners_distances_lst = np.zeros(10)
+        self.bad_corners_distances_lst = np.zeros(20)
         self.bad_corners_idx = 0
         self.bad_corners_thresh = 0.6
 
         self.img_shape = shape
+
+        # TODO dist a and b of the table
+        # dist_map = self.table_dist_map(corners_l, corners_r, check_err=False, get_plane=True)
+        # a = self.get_length(corners_l[0], corners_l[1], dist_map)
+        # b = self.get_length(corners_l[1], corners_l[2], dist_map)
 
         t_map = create_table_map(corners_l, corners_r, shape, map_dense=map_dense)
         self.map = t_map
         self.whole_map = np.zeros(shape, dtype='uint8')
         self.map_shape = self.map.shape
         self.map_points = np.array([[0, 0], [t_map.shape[1], 0], [t_map.shape[1], t_map.shape[0]], [0, t_map.shape[0]]])
+
+    def get_length(self, corner1, corner2, dist_map):
+        x1, y1 = corner1
+        x2, y2 = corner2
+        dx = np.max([x1, x2]) - np.min([x1, x2])
+        dy = np.max([y1, y2]) - np.min([y1, y2])
+        x3 = np.min([x1, x2])
+        y3 = np.min([y1, y2])
+        z1 = dist_map[y1, x1]
+        z2 = dist_map[y2, x2]
+        z3 = dist_map[y3, x3]
+        angle_x = dx / (640 / 87)
+        angle_y = dy / (320 / 56)
+        dx_sqr = z3**2 + z2**2 - 2 * z2 * z3 * np.cos(angle_x)
+        dy_sqr = z3**2 + z1**2 - 2 * z1 * z3 * np.cos(angle_y)
+        return (dx_sqr + dy_sqr) ** 0.5
 
     def project_map2real(self, im_l, im_r, mask_l, mask_r, application, real_touch_idxs=np.zeros((0, 2)),
                          touch_indicator=False, show_touch=False):
@@ -89,7 +110,7 @@ class TableMap:
     def screenshot_thread(self, application):
         self.whole_map[:self.map_shape[0], :self.map_shape[1]] = application.get_whole_map() #* 0 + 100# TODO delete * 0 + 100!
 
-    def table_dist_map(self, corners_l, corners_r, former_dist_map=None, show=False, check_err=True):
+    def table_dist_map(self, corners_l, corners_r, former_dist_map=None, show=False, check_err=True,  get_plane=False):
         t_seg_l = np.zeros(self.img_shape[:2])
         t_seg_l = cv2.fillPoly(t_seg_l, [corners_l], 255)  # creates a seg map from the corners
         if show:
@@ -100,17 +121,12 @@ class TableMap:
 
         if check_err:
             # measures if the distances are reasonable distances to 4 corners of a rectangle table
-            n, m = self.map_shape[1], self.map_shape[0]
-            a, b, d, c = np.array(corners_distances)[:, 0]
-            a_squared = a ** 2
-            x = (a_squared - b ** 2 + n ** 2) / (2 * n)
-            y = (a_squared - c ** 2 + m ** 2) / (2 * m)
-            z_squared = a_squared - x ** 2 - y ** 2
-            err = abs((x - n) ** 2 + (y - m) ** 2 + z_squared - d ** 2) ** 0.5
+            mini = corners_distances.min()  # closest corner (in cm)
+            maxi = corners_distances.max()  # farets corner (in cm)
+            diff = maxi - mini  # differance between them (in cm)
+            # print(f"diff: {maxi - mini:.2f},  min: {mini:.2f}, max: {maxi:.2f}")
             self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
-            # print(f"invalid mean: {self.bad_corners_distances_lst}")
-            if err > 30:  # TODO is good parameter??
-                # err needs to be less than around 25 or more
+            if (diff > 200) or (maxi > 600) or (mini < 20):  # TODO is good parameter??
                 self.bad_corners_distances_lst[self.bad_corners_idx] = 1
                 if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
                     return former_dist_map, False
@@ -119,12 +135,35 @@ class TableMap:
             self.bad_corners_distances_lst[self.bad_corners_idx] = 0
             # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
 
+        # if check_err:
+        #     # measures if the distances are reasonable distances to 4 corners of a rectangle table
+        #     n, m = 1, 1 #self.map_shape[1], self.map_shape[0]  # TODO uncomment
+        #     a, b, d, c = np.array(corners_distances)[:, 0]
+        #     a_squared = a ** 2
+        #     x = (a_squared - b ** 2 + n ** 2) / (2 * n)
+        #     y = (a_squared - c ** 2 + m ** 2) / (2 * m)
+        #     z_squared = a_squared - x ** 2 - y ** 2
+        #     err = abs((x - n) ** 2 + (y - m) ** 2 + z_squared - d ** 2) ** 0.5
+        #     self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
+        #     # print(f"invalid mean: {self.bad_corners_distances_lst}")
+        #     if err > 30:  # TODO is good parameter??
+        #         # err needs to be less than around 25 or more
+        #         self.bad_corners_distances_lst[self.bad_corners_idx] = 1
+        #         if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
+        #             return former_dist_map, False
+        #         return former_dist_map, True
+        #     # the distances make sense
+        #     self.bad_corners_distances_lst[self.bad_corners_idx] = 0
+        #     # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
+
             # print(err)
 
         A = np.matrix(np.c_[corners_l, np.ones(4)])
         plan = (A.T * A).I * A.T * corners_distances  # get the plan equation (solve pseudo inverse
         xx, yy = np.meshgrid(np.arange(t_seg_l.shape[1]), np.arange(t_seg_l.shape[0]))
         dist_map_t = plan[0, 0] * xx + plan[1, 0] * yy + plan[2, 0]  # create a plane
+        if get_plane:
+            return dist_map_t
         dist_map_t = dist_map_t * (t_seg_l != 0)  # cut the plane in the segmentation size
 
         # update the table corners

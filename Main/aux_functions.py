@@ -148,8 +148,9 @@ def calc_distance(x_left, x_right, width):
     mid_left = width//2
     mid_right = width//2
     # ------- camera parameters----------
-    alpha = 90  # Camera field of view in the horizontal plane [degrees]
-    f_pixel = (width*0.5)/np.tan(alpha*0.5*np.pi/180)  # focal length in pixels
+    # alpha = 80  # Camera field of view in the horizontal plane [degrees]
+    # (width*0.5)/np.tan(alpha*0.5*np.pi/180)
+    f_pixel = 350  # focal length in pixels
     base = 12
     # ------------disparity---------
     xL = x_left - mid_left
