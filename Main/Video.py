@@ -24,9 +24,10 @@ class Video_operations:
         self.flip = False
         self.stereo = True
         self.finish_calibration = False
+        self.sending_resolution = (900, 320)
     
-    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", resolution: tuple = (1280,360)):
-        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, resolution, True)
+    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
+        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
 
         if not self.gstreamer_writer.isOpened():
             print('VideoWriter not opened')
@@ -123,9 +124,8 @@ class Video_operations:
                 self.frame_queue.put(frame)
     
     def __view_thread_video_and_send_video(self,func, write: bool = True):
-        
         while True:
-             
+
             frame = self.frame_queue.get()
             
             if self.stereo == True:
@@ -138,20 +138,22 @@ class Video_operations:
             else:
                 if self.flip:
                     frame = cv2.flip(frame, 1)
-                    
-            frame , self.finish_calibration = func(frame)
-            
+
+            s = time.time()
+            frame, self.finish_calibration = func(frame)
+            print((time.time() - s))
+
             self.ready_to_read = True
             if write is True:
+                frame = self.reshspe4phone(frame)
                 self.gstreamer_writer.write(frame)
             cv2.namedWindow('Video', cv2.WINDOW_KEEPRATIO)
             cv2.imshow('Video', frame)
-            cv2.resizeWindow('Video', 1280*2, 320*2)
+            # cv2.resizeWindow('Video', 1280*2, 320*2)
 
             key = cv2.waitKey(10)
             if key == ord('q'):
                 break
-  
         cv2.destroyAllWindows()
       
     def save_and_preview_video_from_other_video(self, func, source: str, destination: str, ):
@@ -183,6 +185,19 @@ class Video_operations:
         out.release()
         cv2.destroyAllWindows()
         
+    def reshspe4phone(self, frame: np.array):
+        left_frame = self.get_left_image(frame)
+        right_frame = self.get_right_image(frame)
+        roi = [round(left_frame.shape[0] * 0), round(left_frame.shape[0] * 1),
+                    round(left_frame.shape[1] * 0.20),
+                    round(left_frame.shape[1] * 0.80)]  # [y_start, y_end, x_start, x_end]
+        crop_l = left_frame[roi[0]:roi[1], roi[2]:roi[3]]
+        crop_r = right_frame[roi[0]:roi[1], roi[2]:roi[3]]
+        mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.05)-3, 3), dtype='uint8')
+        side_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.15), 3), dtype='uint8')
+        reshaped = np.concatenate([side_zeros, crop_l, mid_zeros, crop_r, side_zeros], axis=1)
+        return reshaped
+
     def draw_contour_two_image_or_one(self, image: np.array, contour: np.array, channels: int = 3, stereo: bool = False):
         if stereo == True:
             left_image = self.__draw_contour(self.get_left_image(image), contour, channels)

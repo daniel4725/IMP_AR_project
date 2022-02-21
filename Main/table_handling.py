@@ -19,7 +19,6 @@ class TableMap:
         self.img_shape = shape
 
         t_map = create_table_map(corners_l, corners_r, shape, map_dense=map_dense)
-        t_map = np.zeros([400, 400, 3], dtype="uint8")  # TODO delete line!!!!!!!!!!!!!!!
         self.map = t_map
         self.whole_map = np.zeros(shape, dtype='uint8')
         self.map_shape = self.map.shape
@@ -113,8 +112,8 @@ class TableMap:
             if err > 30:  # TODO is good parameter??
                 # err needs to be less than around 25 or more
                 self.bad_corners_distances_lst[self.bad_corners_idx] = 1
-                # if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
-                #     return former_dist_map, False
+                if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
+                    return former_dist_map, False
                 return former_dist_map, True
             # the distances make sense
             self.bad_corners_distances_lst[self.bad_corners_idx] = 0
@@ -295,11 +294,14 @@ def create_table_map(corners_l, corners_r, im_shape, map_dense=2):
     corners_xyz = np.concatenate((corners_l, t_distances[:, np.newaxis]), 1)
     table_shape_x = np.sqrt(((corners_xyz[1] - corners_xyz[0]) ** 2).sum()).astype('int') * map_dense
     table_shape_y = np.sqrt(((corners_xyz[2] - corners_xyz[1]) ** 2).sum()).astype('int') * map_dense
+    # TODO is that goo enough??
+    return np.zeros(im_shape)
     return np.zeros([table_shape_y, table_shape_x, 3], dtype="uint8")
 
 
 class CornersFollower:
-    def __init__(self, first_frame, err_tolerance=10, show=False, name="follower"):
+    def __init__(self, first_frame, err_tolerance=10, static_cam=False, show=False, name="follower"):
+        self.static_cam = static_cam
         self.name = name
         self.err_tolerance = err_tolerance
         self.skip_that_frame = -1
@@ -414,6 +416,9 @@ class CornersFollower:
         return reasonable
 
     def follow(self, next_frame, mask, show=False, show_out=False):
+        if self.static_cam:
+            changed = False
+            return self.current_corners, changed
         self.next_frame = next_frame
         gray_frame = cv2.cvtColor(next_frame, cv2.COLOR_BGR2GRAY).copy()
         self.corners2lines(mask)

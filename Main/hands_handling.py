@@ -20,7 +20,7 @@ def hands_matches_points(mask_l, mask_r, im_l, im_r, threshold=10, num_matches=3
         cv2.imshow("Detected FAST keypoints on the mask", img2)
 
     if len(kp1) == 0 or len(kp2) == 0:
-        print("no good key points")
+        # print("no good key points")
         return np.zeros((0, 2)), np.zeros((0, 2))
 
     kp1, des1 = orb.compute(im_l, kp1)

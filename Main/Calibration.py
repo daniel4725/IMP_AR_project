@@ -117,7 +117,7 @@ class Calibration:
             return self.gmm_train(self.GMM_Image, Save_model=False)
         elif state == self.calibration_state_names["preview_results"]:
             if self.timer_started is False:
-                self.timer = 40
+                self.timer = 20
                 self.timing_thread = threading.Thread(target=self.__timer_sec)
                 self.timing_thread.start()
             if self.timer_finished is True:
@@ -413,7 +413,6 @@ if __name__ == "__main__":
     video = Video_operations()
     cal = Calibration(video, True)
     
-    # gstreamer_writer = video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
     capture = video.open_gstreamer_video_capture(flip=False)
     # capture = video.open_video_capture_from_path("regular_video.mp4", stereo=True)
     # capture = video.open_pc_video_capture(0, flip=True, stereo=False)

@@ -16,12 +16,12 @@ class HandOperations:
 
         with open(os.path.join(directory, 'bovw_90_new_circle.pkl'), 'rb') as pickle_file:
             self.kmeans, self.scale, self.svm, self.im_features, self.train_labels, self.no_clusters = pickle.load(pickle_file)
-
         with open(os.path.join(directory, "hand_gmm_model.sav"), 'rb') as handle:
             self.GMM_Model = pickle.load(handle)
-
         with open(os.path.join(directory, "hand_best_labels.sav"), 'rb') as handle:
-            self.two_comp_label_list = pickle.load(handle)
+            self.hand_comp_label_list = pickle.load(handle)
+        with open(os.path.join(directory, "hand_sleeve_labels.sav"), 'rb') as handle:
+            self.sleeve_comp_label_list = pickle.load(handle)
 
         self.sift = cv2.SIFT_create()
 
@@ -32,25 +32,20 @@ class HandOperations:
             "3": "square",
         }
 
-    def load_saved_model(self, path: str):
-        with open(path, 'rb') as handle:
-            self.GMM_Model = pickle.load(handle)
-
-    def load_saved_best_labels(self, path: str):
-        with open(path, 'rb') as handle:
-            self.two_comp_label_list = pickle.load(handle)
-
-    def get_two_comp_segmentation(self, n_comp_segmented_img: np.array):
+    def get_two_comp_segmentation(self, n_comp_segmented_img: np.array, get_sleeve=False):
         reduced_GMM_Labels_segmented_img = np.zeros(n_comp_segmented_img.shape)
-        reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, self.two_comp_label_list)] = 1
+        if get_sleeve:
+            reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, self.sleeve_comp_label_list)] = 1
+        else:
+            reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, self.hand_comp_label_list)] = 1
         return reduced_GMM_Labels_segmented_img
 
-    def get_segmentation(self, img: np.array):
+    def get_segmentation(self, img: np.array, get_sleeve=False):
         Shape = img.shape
         img = cv2.resize(img, (Shape[1]//2, Shape[0]//2), interpolation=cv2.INTER_AREA)
         imageLAB = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
 
-        L = np.array(imageLAB[:, :, 0]).flatten()
+        # L = np.array(imageLAB[:, :, 0]).flatten()
         a = np.array(imageLAB[:, :, 1]).flatten()
         b = np.array(imageLAB[:, :, 2]).flatten()
         data = np.array([a, b]).transpose()
@@ -59,12 +54,15 @@ class HandOperations:
 
         segmented_labels = np.array(GMM_Labels).reshape(img.shape[0], img.shape[1])
 
-        segmented = self.get_two_comp_segmentation(segmented_labels)
+        segmented = self.get_two_comp_segmentation(segmented_labels, get_sleeve)
+
         segmented = cv2.resize(segmented, (Shape[1], Shape[0]), interpolation=cv2.INTER_AREA)
         return segmented
 
-    def get_hand_mask(self, image: np.array):
-        predicted = self.get_segmentation(image)
+    def get_hand_mask(self, image: np.array, get_sleeve=False):
+        predicted = self.get_segmentation(image, get_sleeve)
+        if get_sleeve:
+            return predicted
         imageseg = ImageOperations.morph_close(predicted)
         imageseg = ImageOperations.morph_open(imageseg)
         imagenorm = cv2.normalize(imageseg, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)

@@ -169,11 +169,12 @@ class Application:
         for i in range(4):
             start_point = corners[i]
             end_point = corners[(i + 1) % 4]
-            color = (1, 1, 1)
+            color1 = (1, 1, 1)
+            color2 = (170, 1, 170)
             thickness = 15
-            cv2.line(self.none_map, start_point, end_point, color, thickness)
-            cv2.line(self.none_map, start_point, end_point, (170, 1, 170), 4 * thickness//5)
-            cv2.line(self.none_map, start_point, end_point, color, thickness//5)
+            cv2.line(self.none_map, start_point, end_point, color1, thickness)
+            cv2.line(self.none_map, start_point, end_point, color2, 4 * thickness//5)
+            cv2.line(self.none_map, start_point, end_point, color1, thickness//5)
 
         self.paint_app = PaintApp(map)
         self.tablet = TabletApp(map)

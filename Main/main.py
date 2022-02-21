@@ -27,12 +27,12 @@ def measure(func):
 
 class Main():
     def __init__(self):
-        self.state = 2   
+        self.state = 2
     
     def main(self):
         self.video = Video_operations()
         
-        gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.131", (1280, 320))
+        gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.169")
         capture = self.video.open_gstreamer_video_capture(flip=False)
         # capture = video.open_pc_video_capture(1)
         self.video.start_thread_record_view_send(capture, self.main_state_machine, True)
@@ -60,7 +60,7 @@ class Main():
         elif self.state == 3:
             im_l = self.video.get_left_image(frame)
             im_r = self.video.get_right_image(frame)
-            im_l, im_r = self.aug_real.get_AR(im_l, im_r)  # TODO remove the masks
+            im_l, im_r = self.aug_real.get_AR(im_l, im_r)
             return (self.video.image_concat(im_l, im_r), False)
     
 if __name__ == "__main__":

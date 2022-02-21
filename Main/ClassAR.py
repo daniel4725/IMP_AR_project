@@ -31,17 +31,17 @@ def write(im_l, im_r, txt="3D! Hello"):  # TODO delete
     return im_l, im_r
 
 class AR:
-    def __init__(self, im_l, im_r):
+    def __init__(self, im_l, im_r, static_cam=False):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")
         with open(os.path.join(directory, 'corner_follower_l.sav'), 'rb') as handle:
             self.corner_follower_l = pickle.load(handle)
         with open(os.path.join(directory, 'corner_follower_r.sav'), 'rb') as handle:
             self.corner_follower_r = pickle.load(handle)
 
-        # self.corner_follower_l = CornersFollower(im_l, show=True,
-        #                                     name="c_follow_l")  # Create the corner follower for left image
-        # self.corner_follower_r = CornersFollower(im_r, show=True,
-        #                                     name="c_follow_r")  # Create the corner follower for right image
+        self.corner_follower_l = CornersFollower(im_l, static_cam=static_cam, show=True,
+                                            name="c_follow_l")  # Create the corner follower for left image
+        self.corner_follower_r = CornersFollower(im_r, static_cam=static_cam, show=True,
+                                            name="c_follow_r")  # Create the corner follower for right image
 
         # Objects
         self.renew_seg_countdown_clk = CountDown()
@@ -68,16 +68,18 @@ class AR:
         self.im_r = None
         self.mask_l = None
         self.mask_r = None
+        self.sleeve_l = None
+        self.sleeve_r = None
 
     def get_hand_r_seg(self):
         self.mask_r = self.hand_operations.get_hand_mask(self.im_r)
         # TODO change to mask_r
 
-    # def get_sleeve_r_seg(self):
-    #     self.sleeve_r = self.hand_operations.get_hand_mask(self.im_r)
-    #
-    # def get_sleeve_l_seg(self):
-    #     self.sleeve_l = self.hand_operations.get_hand_mask(self.im_r)
+    def get_sleeve_r_seg(self):
+        self.sleeve_r = self.hand_operations.get_hand_mask(self.im_r, get_sleeve=True)
+
+    def get_sleeve_l_seg(self):
+        self.sleeve_l = self.hand_operations.get_hand_mask(self.im_l, get_sleeve=True)
 
     def renew_seg_right(self, scale):
         self.re_corners_r, self.re_seg_img_r = get_table_corners(self.im_r, scale=scale)  # TODO scale?
@@ -91,14 +93,14 @@ class AR:
                                        correlation_tolerance=0.4, show=False)
 
     def follow_right_corners(self):
-        self.new_corners_r, self.changed_r = self.corner_follower_r.follow(self.im_r, self.mask_r, show_out=False)
+        self.new_corners_r, self.changed_r = self.corner_follower_r.follow(self.im_r, self.mask_r + self.sleeve_r, show_out=False)
 
     def table_distance_calc(self):
         # following right and left corners in parallel:
         former_corners = (self.corner_follower_l.current_corners.copy(), self.corner_follower_r.current_corners.copy())
         right_corners_thread = threading.Thread(target=self.follow_right_corners)
         right_corners_thread.start()
-        new_corners_l, changed_l = self.corner_follower_l.follow(self.im_l, self.mask_l, show_out=False)
+        new_corners_l, changed_l = self.corner_follower_l.follow(self.im_l, self.mask_l + self.sleeve_l, show_out=False)
         right_corners_thread.join()
 
         if (changed_l and not self.changed_r) or (self.changed_r and not changed_l):
@@ -112,13 +114,12 @@ class AR:
                 # tracking error - renewed table segmentation is needed
                 self.renew_table_segmentation = True
 
-    def get_AR(self, im_l, im_r, mask_l=None, mask_r=None):
+    def get_AR(self, im_l, im_r, show_dist_map=False, renew_table_seg=True):
+        s = time.time()
         self.im_l = im_l
         self.im_r = im_r
-        self.mask_l = mask_l
-        self.mask_r = mask_r
         # --------- bad table following for some time ----
-        if self.renew_table_segmentation or self.renewing_t_seg:
+        if (self.renew_table_segmentation or self.renewing_t_seg) and renew_table_seg:
             if self.renew_table_segmentation:
                 self.renewing_t_seg = True
                 self.renew_table_segmentation = False
@@ -152,11 +153,17 @@ class AR:
         # TODO ------------------------ here:  -------------------------------
         #  using im_l and im_r extracting mask_l and mask_r
         hand_seg_r_thread = threading.Thread(target=self.get_hand_r_seg)
+        sleeve_seg_l_thread = threading.Thread(target=self.get_sleeve_l_seg)
+        sleeve_seg_r_thread = threading.Thread(target=self.get_sleeve_r_seg)
         hand_seg_r_thread.start()
+        sleeve_seg_l_thread.start()
+        sleeve_seg_r_thread.start()
         self.mask_l = self.hand_operations.get_hand_mask(im_l)
         hand_seg_r_thread.join()
-        cv2.imshow("makim", np.concatenate([self.mask_l, self.mask_r], axis=1))
-        # mask_l, mask_r = hand_operations.get_hand_mask(im_l), hand_operations.get_hand_mask(im_r)
+        sleeve_seg_l_thread.join()
+        sleeve_seg_r_thread.join()
+        cv2.imshow("hands", np.concatenate([self.mask_l, self.mask_r], axis=1))
+        cv2.imshow("sleeves", np.concatenate([self.sleeve_l, self.sleeve_r], axis=1))
 
         # ---------------------- state machine and distances map (hands and table) calculations --------------------
         # starts the hands and the table distance map calculations
@@ -190,4 +197,11 @@ class AR:
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
         self.state_machine.add_text(im_l)
+
+        if show_dist_map:
+            # show distances map
+            dist_map = self.dist_map_table.copy()
+            dist_map[self.dist_map_hands > 0] = self.dist_map_hands[self.dist_map_hands > 0]
+            cv2.imshow('distances', dist_map.astype('uint8') * 2)
+        # print(time.time() - s)
         return im_l, im_r

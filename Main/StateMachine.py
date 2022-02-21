@@ -36,7 +36,8 @@ class StateMachine:
         back_roi = [0, 40, shape[1] - 40, shape[1]]
         back_dim = (back_roi[3] - back_roi[2], back_roi[1] - back_roi[0])
         self.back_button_roi = back_roi
-        back_img = cv2.imread(os.path.join(os.getcwd(), "images", "back_button.jpg"))
+        directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+        back_img = cv2.imread(os.path.join(directory, "back_button.jpg"))
         self.back_img = cv2.resize(back_img, back_dim, interpolation=cv2.INTER_AREA)
         self.in_delay = False
         self.delay_between_states = 2
