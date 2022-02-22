@@ -18,14 +18,9 @@ class TableMap:
 
         self.img_shape = shape
 
-        # TODO dist a and b of the table
-        # dist_map = self.table_dist_map(corners_l, corners_r, check_err=False, get_plane=True)
-        # a = self.get_length(corners_l[0], corners_l[1], dist_map)
-        # b = self.get_length(corners_l[1], corners_l[2], dist_map)
-
         t_map = create_table_map(corners_l, corners_r, shape, map_dense=map_dense)
         self.map = t_map
-        self.whole_map = np.zeros(shape, dtype='uint8')
+        self.whole_map = np.zeros(t_map.shape, dtype='uint8')
         self.map_shape = self.map.shape
         self.map_points = np.array([[0, 0], [t_map.shape[1], 0], [t_map.shape[1], t_map.shape[0]], [0, t_map.shape[0]]])
 
@@ -92,7 +87,7 @@ class TableMap:
                 cv2.circle(im_l, center_coordinates, radius, color, thickness)
         return im_l, im_r
 
-    def project2right_img_thread(self, im_r_lst, mask_r):
+    def project2right_img_thread(self, im_r_lst, mask_r, use_tablet=False):
         # im_r_lst is a list that has one index, in it the im_r. it is a list so it will be mutable
         im_r = im_r_lst[0]
         tform_mat_r, _ = cv2.findHomography(self.corners_r, self.map_points)
@@ -118,6 +113,30 @@ class TableMap:
             t_seg_r = cv2.fillPoly(t_seg_r, [corners_r], 255)
             cv2.imshow("both segmentations", np.concatenate((t_seg_l, t_seg_r), axis=1))
         corners_distances = np.matrix(calc_distance(corners_l[:, 0], corners_r[:, 0], t_seg_l.shape[0])).T
+
+        """
+        a1, b1, a2, b2 = get_table_sizes(corners_l, np.array(corners_distances)[:, 0], self.img_shape)
+        print(f"a1 = {a1:.2f}, a2 = {a2:.2f}, b1 = {b1:.2f}, b2 = {b2:.2f}")
+        if check_err:
+            diff_a = abs(a1 - a2)
+
+            if abs(a1 - a2) < 10 or abs(b1 - b2) < 10:
+                a = 6
+            # measures if the distances are reasonable distances to 4 corners of a rectangle table
+            mini = corners_distances.min()  # closest corner (in cm)
+            maxi = corners_distances.max()  # farets corner (in cm)
+            diff = maxi - mini  # differance between them (in cm)
+            # print(f"diff: {maxi - mini:.2f},  min: {mini:.2f}, max: {maxi:.2f}")
+            self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
+            if (diff > 200) or (maxi > 600) or (mini < 20):  # TODO is good parameter??
+                self.bad_corners_distances_lst[self.bad_corners_idx] = 1
+                if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
+                    return former_dist_map, False
+                return former_dist_map, True
+            # the distances make sense
+            self.bad_corners_distances_lst[self.bad_corners_idx] = 0
+            # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
+        """
 
         if check_err:
             # measures if the distances are reasonable distances to 4 corners of a rectangle table
@@ -326,16 +345,53 @@ def get_seg_corners(seg_img, name="", scale=1, show=False):
 
 def create_table_map(corners_l, corners_r, im_shape, map_dense=2):
     # TODO doc
+
     # map_dense = 2  # the dense of the map (when transforming from the map we dont want blank spots)
+    # TODO change map dence for better performances
 
-    t_distances = calc_distance(corners_l[:, 0], corners_r[:, 0], im_shape[0])
-
-    corners_xyz = np.concatenate((corners_l, t_distances[:, np.newaxis]), 1)
-    table_shape_x = np.sqrt(((corners_xyz[1] - corners_xyz[0]) ** 2).sum()).astype('int') * map_dense
-    table_shape_y = np.sqrt(((corners_xyz[2] - corners_xyz[1]) ** 2).sum()).astype('int') * map_dense
-    # TODO is that goo enough??
-    return np.zeros(im_shape)
+    # scale_factor = 10
+    # t_distances = calc_distance(corners_l[:, 0], corners_r[:, 0], im_shape[0])
+    # a1, b1, a2, b2 = get_table_sizes(corners_l, t_distances, im_shape)
+    # print(f"a1 = {a1:.2f}, a2 = {a2:.2f}, b1 = {b1:.2f}, b2 = {b2:.2f}")
+    #
+    # table_shape_x = (((a1 + a2)/2) * scale_factor * map_dense).round().astype('int')
+    # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
+    # table_shape_x = (((a1 + a2)/2) * scale_factor * map_dense).round().astype('int')
+    # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
+    table_shape_x = np.max([300, 200])
+    table_shape_y = np.min([300, 200])
+    # TODO delete line when ready
     return np.zeros([table_shape_y, table_shape_x, 3], dtype="uint8")
+
+
+def get_table_sizes(corners, distances, shape, x_opening=87, y_opening=56):
+    """ x_opening = 87  in degrees, y_opening = 56  in degrees
+    calculates the length of the table sides """
+    width = shape[1]
+    height = shape[0]
+    x_mid = width//2
+    y_mid = height//2
+    deg_x = x_opening/width
+    deg_y = y_opening/height
+
+    p = np.zeros((4, 3))
+    for i in range(4):
+        r = distances[i]
+        phi = (corners[i, 0] - x_mid) * deg_x
+        theta = (corners[i, 1] - y_mid) * deg_y
+        # phi = corners[i, 0] * deg_x
+        # theta = corners[i, 1] * deg_y
+        phi = np.deg2rad(phi)
+        theta = np.deg2rad(theta)
+        p[i] = np.array([r, phi, theta])
+
+    lengths = [0, 0, 0, 0]
+    for i in range(4):
+        r1, phi1, theta1 = p[i]
+        r2, phi2, theta2 = p[(i + 1) % 4]
+        angles = np.sin(theta1) * np.sin(theta2) * np.cos(phi1 - phi2) + np.cos(theta1) * np.cos(theta2)
+        lengths[i] = np.sqrt(r1**2 + r2**2 - 2 * r1 * r2 * angles)
+    return lengths
 
 
 class CornersFollower:

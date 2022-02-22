@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import ImageOperations
 import pickle
-import threading
 import os
 
 
@@ -61,8 +60,6 @@ class HandOperations:
 
     def get_hand_mask(self, image: np.array, get_sleeve=False):
         predicted = self.get_segmentation(image, get_sleeve)
-        if get_sleeve:
-            return predicted
         imageseg = ImageOperations.morph_close(predicted)
         imageseg = ImageOperations.morph_open(imageseg)
         imagenorm = cv2.normalize(imageseg, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)

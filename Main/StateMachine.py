@@ -47,7 +47,6 @@ class StateMachine:
     def __init__(self, hand_operations, shape, crop_x):
         self.state = self.MAIN_MENU
         self.former_state = self.MAIN_MENU
-        self.text = ""
         self.classifier_roi = [130, 230, shape[1]//2 - 60 + 30, shape[1]//2 + 60 + 30]  # [y_start, y_end, x_start, x_end]
         # back_roi = [0, 40, shape[1]-crop_x - 40, shape[1]-crop_x]
         back_roi = [0, 40, crop_x + 50, crop_x + 40 + 50]
@@ -56,8 +55,10 @@ class StateMachine:
         renew_table_roi = [0, 40, crop_x, crop_x + 40]
         self.renew_table_roi = renew_table_roi
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-        back_img = cv2.imread(os.path.join(directory, "back_button.jpg"))
+        back_img = cv2.imread(os.path.join(directory, "back.png"))
         self.back_img = cv2.resize(back_img, back_dim, interpolation=cv2.INTER_AREA)
+        find_table_img = cv2.imread(os.path.join(directory, "find_table.png"))
+        self.find_table_img = cv2.resize(find_table_img, back_dim, interpolation=cv2.INTER_AREA)
         self.in_delay = False
         self.delay_between_states = 2
         self.state_changed = False
@@ -75,7 +76,7 @@ class StateMachine:
                                 self.SQUARE: "square", self.SMILIE: "smilie"}
 
         self.color_name_dict = {self.BLUE: "blue", self.GREEN: "green", self.RED: "red",
-                                self.YELLOW: "yellow", self.PURPLE: "purple"}
+                                self.YELLOW: "yellow", self.PURPLE: "Yossi"}
 
         self.LOC_TITLE[0] += crop_x
         self.LOC1[0] += crop_x
@@ -162,6 +163,22 @@ class StateMachine:
 
         self.state_changed = self.state != tmp_state
 
+    def write_looking4table(self, im_l, im_r, counter):
+        left_loc = self.LOC_CENTER_SHAPE.copy()
+        left_loc[0] += self.offset
+        cv2.putText(im_l, "  " + counter, tuple(left_loc), self.font, 3, self.FONT_COLOR, 4, cv2.LINE_4)
+        cv2.putText(im_r, "  " + counter, tuple(self.LOC_CENTER_SHAPE), self.font, 3, self.FONT_COLOR, 4, cv2.LINE_4)
+
+        left_loc = self.LOC1.copy()
+        left_loc[0] += self.offset
+        cv2.putText(im_l, "        Looking for Table...", tuple(left_loc), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+        cv2.putText(im_r, "        Looking for Table...", tuple(self.LOC1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+
+        left_loc = self.LOC3.copy()
+        left_loc[0] += self.offset
+        cv2.putText(im_l, "     Please Move You'r Hands", tuple(left_loc), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+        cv2.putText(im_r, "     Please Move You'r Hands", tuple(self.LOC3), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+
     def add_text(self, frame, left=False):
         self.change_use_locations(left)
 
@@ -222,7 +239,7 @@ class StateMachine:
             cv2.putText(frame, '2. ' + self.color_name_dict[2], tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             cv2.putText(frame, '3. ' + self.color_name_dict[3], tuple(self.loc3), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             cv2.putText(frame, '4. ' + self.color_name_dict[4], tuple(self.loc4), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, '5. ' + self.color_name_dict[5], tuple(self.loc5), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+            cv2.putText(frame, '5. ' + "Add Yossi", tuple(self.loc5), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             # cv2.putText(frame, 'Put fist to go back ', (20, 120), self.font, 1, self.FONT_COLOR, 2, cv2.LINE_4)
             self.add_roi_rectangle(frame, self.classifier_roi, left=left)
             self.add_back_button(frame)
@@ -297,7 +314,7 @@ class StateMachine:
         if not left:
             roi[2] -= self.offset
             roi[3] -= self.offset
-        cv2.rectangle(frame, (roi[2], roi[0]), (roi[3], roi[1]), (255, 0, 0), 1)  # (top left corner),(bottom right corner)
+        frame[roi[0]: roi[1], roi[2]: roi[3]] = self.find_table_img
 
     def state_operations(self, img, mask, application=None):
         if self.state_changed or self.in_delay:  # state just changed - small delay
@@ -324,8 +341,9 @@ class StateMachine:
                 self.shape_classifier.memory *= 0
                 # self.transition(self.BACK, application)  # TODO add that line
                 print('renewed')
+                return True  # renew the table segmentation
 
-            if self.state in [self.MAIN_MENU, self.PAINT_MENU, self.CHANGE_COLOR]:
+            elif self.state in [self.MAIN_MENU, self.PAINT_MENU, self.CHANGE_COLOR]:
                 num_fingers, fingers_valid = self.count_fingers.check_and_add(mask)
                 if fingers_valid:
                     self.count_fingers.memory *= 0  # zeros the memory
@@ -336,6 +354,8 @@ class StateMachine:
                 if shape_valid:
                     self.shape_classifier.memory *= 0  # zeros the memory
                     self.transition(shape_class, application)  # TODO add that line
+
+        return False   # don't renew the table segmentation
 
 
 class ClassifierCounter:

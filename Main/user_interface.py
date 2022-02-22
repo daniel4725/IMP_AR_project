@@ -47,8 +47,8 @@ class TabletApp:
         self.touchscreen = TouchScreen()
         self.region = (self.x, self.y, self.x + self.width, self.y + self.height)
 
-        # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-P610' in title][0]
-        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
+        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-P610' in title][0]
+        # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
         self.hwnd = tablet_window[0]
         win32gui.MoveWindow(self.hwnd, 0, 0, map.shape[1] + 2 * sides_size, map.shape[0] + sides_size + upper_bar_size, True)
         # ScreenToClient
@@ -89,7 +89,7 @@ class PaintApp:
     SMILIE = 4
     YOSSI = 5
 
-    def __init__(self, map, duration=0.25, left_up_corner=(44, 255)):
+    def __init__(self, map, duration=0.25, left_up_corner=(41, 279)):
         # import pyautogui
         # use pyautogui.position() to get the current position
         self.x, self.width = left_up_corner[0], map.shape[1]
@@ -103,20 +103,19 @@ class PaintApp:
 
 
         self.duration = duration
-        self.buttons_loc_dict = {"insert_shape": (769, 155), "home": (1794, 73),
-                                "paint": (1613, 70), "draw_pen": (1654, 135),
-                                "normal_mouse": (1873, 143), "change_color": (504, 113),
+        self.buttons_loc_dict = {"insert_shape": (1150, 175), "home": (122, 91),
+                                "paint": (280, 94), "draw_pen": (287, 177),
+                                "normal_mouse": (56, 162), "change_color": (1375, 142),
 
-                                self.CIRCLE: (754, 539), self.TRIANGLE: (724, 535),
-                                self.SQUARE: (785, 453), self.SMILIE: (634, 596),
+                                self.CIRCLE: (1167, 580), self.TRIANGLE: (1195, 573),
+                                self.SQUARE: (1133, 487), self.SMILIE: (1281, 637),
 
-                                 "default_shape": (1462, 905), self.YOSSI: (1530, 700)}
+                                 "default_shape": (1562, 870), self.YOSSI: (1565, 711)}
 
-
-        self.shape_colors_dict = {self.BLUE: (429, 392), self.GREEN: (450, 389), self.RED: (555, 389),
-                                  self.YELLOW: (502, 391), self.PURPLE: (348, 389)}
-        self.pen_colors_dict = {self.BLUE: (1659, 640), self.GREEN: (1502, 646), self.RED: (1500, 535),
-                                  self.YELLOW: (1660, 537), self.PURPLE: (1659, 583)}
+        self.shape_colors_dict = {self.BLUE: (1499, 418), self.GREEN: (1473, 419), self.RED: (1344, 420),
+                                  self.YELLOW: (1426, 422), self.PURPLE: (1579, 419)}
+        self.pen_colors_dict = {self.BLUE: (327, 672), self.GREEN: (430, 673), self.RED: (438, 568),
+                                self.YELLOW: (281, 563), self.PURPLE: (275, 619)}
 
     def update(self, touch_idx, real_mouse_clicks=True):
         clicked_before = self.touchscreen.clicked
@@ -147,7 +146,10 @@ class PaintApp:
 
         x, y = self.buttons_loc_dict[shape]
         mouse.move(x, y, duration=self.duration)
-        mouse.click("left") # # click - the chosen shape
+        mouse.click("left")  # click - the chosen shape
+
+        mouse.move(self.x + self.width//4, self.y + self.height//4, duration=self.duration)
+        mouse.click("left")  # insert the shape
 
     def insert_draw(self):
         x, y = self.buttons_loc_dict["paint"]  # click - paint
@@ -174,6 +176,9 @@ class PaintApp:
     def change_color(self, color):
         self.change_shape_color(color)
         self.change_pen_color(color)
+        x, y = self.buttons_loc_dict["home"]
+        mouse.move(x, y)
+        mouse.click("left")  # click - home
 
     def change_shape_color(self, color):
         x, y = self.buttons_loc_dict["home"]
@@ -193,9 +198,7 @@ class PaintApp:
         x, y = self.buttons_loc_dict["default_shape"]  # right click the default shape
         mouse.move(x, y, duration=self.duration)
         mouse.click("right")
-        pyautogui.press('c')
-        pyautogui.press('c')
-        pyautogui.press('enter')
+        pyautogui.press('d')
 
     def change_pen_color(self, color):
         x, y = self.buttons_loc_dict["paint"]  # click - paint
@@ -220,7 +223,7 @@ class PaintApp:
         mouse.move(x, y)
         mouse.press("left")
         pyautogui.keyDown('ctrl')
-        mouse.move(self.x + self.width//2, self.y + self.height//2, duration=self.duration)
+        mouse.move(self.x + self.width//4, self.y + self.height//4, duration=self.duration)
         mouse.release("left")
         pyautogui.keyUp('ctrl')
 
@@ -267,7 +270,7 @@ class Application:
         self.tablet = TabletApp(map)
         self.running_app = None
         self.enable_touch = False
-        self.allow_clicks = False    # TODO make true
+        self.allow_clicks = True    # TODO make true
 
     def run(self, app_name):
         if app_name == self.PAINT:
@@ -287,6 +290,8 @@ class Application:
             map = ImageGrab.grab(self.running_app.region)
             map = cv2.cvtColor(np.array(map, dtype=np.uint8), cv2.COLOR_RGB2BGR)
             map[self.none_map != 0] = self.none_map[self.none_map != 0]
+            if isinstance(self.running_app, TabletApp):
+                map += 1
             return map
 
     def update_touches(self, touch_idx):
@@ -306,7 +311,10 @@ class Application:
         if operation == self.EXIT_DRAW:
             self.paint_app.exit_draw()
         if operation == self.CHANGE_COLOR:
-            self.paint_app.change_color(arg)
+            if arg == self.PURPLE:
+                self.paint_app.insert_yossi()
+            else:
+                self.paint_app.change_color(arg)
         if operation == self.DELETE:
             self.paint_app.delete_state = True
         if operation == self.EXIT_DELETE:
@@ -319,11 +327,11 @@ if __name__ == "__main__":
     app.run(app.PAINT)
     time.sleep(0.1)
     # cv2.imshow("Ww", app.get_whole_map())
-    cv2.waitKey(0)
-    # app.change_paint_state(app.INSERT_SHAPE, 1)
-    app.change_paint_state(app.CHANGE_COLOR, app.YELLOW)
-    app.change_paint_state(app.INSERT_SHAPE, app.CIRCLE)
+    # cv2.waitKey(0)
+    app.paint_app.insert_yossi()
 
+    app.change_paint_state(app.CHANGE_COLOR, app.GREEN)
+    app.change_paint_state(app.INSERT_SHAPE, app.SQUARE)
     # app.paint_app.insert_yossi()
     print(1)
 

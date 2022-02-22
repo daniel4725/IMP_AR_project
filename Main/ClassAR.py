@@ -31,7 +31,7 @@ def write(im_l, im_r, txt="3D! Hello"):  # TODO delete
     return im_l, im_r
 
 class AR:
-    def __init__(self, im_l, im_r, crop_x: int ,static_cam=False):
+    def __init__(self, im_l, im_r, crop_x: int = 0, static_cam=False):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")
         # with open(os.path.join(directory, 'corner_follower_l.sav'), 'rb') as handle:
         #     self.corner_follower_l = pickle.load(handle)
@@ -54,13 +54,13 @@ class AR:
         self.dist_map_hands = None
 
         self.application = Application(self.table_map.map)
-        self.state_machine = StateMachine(self.hand_operations, im_l.shape, crop_x)
+        self.state_machine = StateMachine(self.hand_operations, im_l.shape, crop_x=crop_x)
 
         # corner following fields:
         self.new_corners_r, self.changed_r = np.zeros((4, 2)), False
         self.renew_table_segmentation = False
         self.renewing_t_seg = False
-        self.renew_seg_counter = 1
+        self.renew_seg_counter = 3
         self.re_corners_r, re_seg_img_r = 0, 0
 
         # TODO get from where??
@@ -130,15 +130,8 @@ class AR:
             self.corner_follower_r.current_corners, self.table_map.corners_r = self.re_corners_r, self.re_corners_r
             self.renewing_t_seg = False
         else:
-            factor = 1.2
-            dim = (int(self.im_l.shape[1] * factor * 0.6), int(self.im_l.shape[0] * factor))
-            resized_l = cv2.resize(self.im_l, dim, interpolation=cv2.INTER_AREA)
-            resized_r = cv2.resize(self.im_r, dim, interpolation=cv2.INTER_AREA)
-            txt = f'SG in: {self.renew_seg_countdown_clk.check()}'
-            write(resized_l, resized_r, txt=txt)
-            out = np.concatenate([resized_l, np.zeros((dim[1], 10, 3), dtype='uint8'), resized_r], axis=1)
-            cv2.imshow('out_stream', out)
-
+            current_count = f'{self.renew_seg_countdown_clk.check()}'
+            self.state_machine.write_looking4table(self.im_l, self.im_r, current_count)
 
     def get_AR(self, im_l, im_r, show_dist_map=False, renew_table_seg=True):
         s = time.time()
@@ -147,7 +140,7 @@ class AR:
         # --------- bad table following for some time ----
         if (self.renew_table_segmentation or self.renewing_t_seg) and renew_table_seg:
             self.find_table()
-            return im_l, im_r
+            return self.im_l, self.im_r
 
         # start a thread that updates the table map using screen shoot
         self.table_map.update_whole_map(application=self.application)
@@ -178,7 +171,7 @@ class AR:
         #  calculate the state according to former one and calculate thing that are in the stage
         #  4. change state accordingly, update the the relevant app (in tablemap
         #  and other relevant objects)
-        self.state_machine.state_operations(self.im_l, self.mask_l, self.application)
+        self.renew_table_segmentation = self.state_machine.state_operations(self.im_l, self.mask_l, application=self.application)
 
         table_thread.join()
         hands_thread.join()
@@ -189,14 +182,13 @@ class AR:
         # TODO 1.
         # ------------------  compare both distances map to find the touching indexes --------------------
         if self.state_machine.state in self.state_machine.ACTIVE_STATES:
-            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands, tolerance=5, show=False)  # TODO: tolerance
+            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands, tolerance=1, show=False)  # TODO: tolerance
         else:
             touch_idxs = np.zeros((0, 2))  # no touches
 
-        # TODO ------------------------ here:  -------------------------------
-        #  after doing stuff - project the map to the table
         # ---------------- estimating the transform and projecting the map to the real table  ------------------
-        im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, self.mask_l, self.mask_r, application=self.application,
+        cover_l, cover_r = self.mask_l + self.sleeve_l, self.mask_r + self.sleeve_r  # TODO sleeve on top??
+        im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, cover_l, cover_r, application=self.application,
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
         self.state_machine.add_text(im_l, left=True)
