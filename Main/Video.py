@@ -1,12 +1,3 @@
-import os
-import sys
-
-# os.add_dll_directory(r'C:\opencv45\bin')
-# os.add_dll_directory(r'C:\opencv45\lib')
-# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\bin')
-# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0')
-# os.add_dll_directory(r'C:\gstreamer\1.0\msvc_x86_64\lib')
-
 import cv2
 import numpy as np 
 import threading
@@ -17,6 +8,7 @@ class Video_operations:
     
     def __init__(self):
         self.gstreamer_writer = None
+        self.gstreamer_writer_2 = None
         self.cap_receive = None
         self.ready_to_read = True
         self.frame_queue = Queue()
@@ -24,23 +16,28 @@ class Video_operations:
         self.flip = False
         self.stereo = True
         self.finish_calibration = False
-        self.sending_resolution = (900, 320)
+        self.sending_resolution = (1000, 320)
         self.timer_started = False
         self.timer_finished = False
         self.count_down = 20
+        self.image_shape = (320,1280)
     
-    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169"):
+    def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", IP_2: str = ''):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
 
+        if IP_2 != '':
+            self.gstreamer_writer_2 = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP_2 + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
         if not self.gstreamer_writer.isOpened():
             print('VideoWriter not opened')
             exit(0)
-            
         return self.gstreamer_writer
     
     def close_gstreamer_video_writer(self):
         if self.gstreamer_writer is not None:
             self.gstreamer_writer.release()
+        
+        if self.gstreamer_writer_2 is not None:
+            self.gstreamer_writer_2.release()
 
     def open_mp4_video_writer(self):
         self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -60,6 +57,7 @@ class Video_operations:
             print('VideoCapture not opened')
             exit(0)
         
+        self.image_shape = (self.gstreamer_capture.read()[1]).shape
         return self.gstreamer_capture
 
     def __timer_sec(self):
@@ -81,6 +79,8 @@ class Video_operations:
         if not self.pc_capture.isOpened():
             print('VideoCapture not opened')
             exit(0)
+            
+        self.image_shape = (self.pc_capture.read()).shape
         
         return self.pc_capture
     
@@ -100,6 +100,7 @@ class Video_operations:
             print('VideoCapture not opened')
             exit(0)
         
+        self.image_shape = (self.video_capture_from_path.read()).shape
         return self.video_capture_from_path
     
     def view_video(self, video_capture):
@@ -125,8 +126,9 @@ class Video_operations:
         cv2.destroyAllWindows()
         
     def start_thread_record_view_send(self, capture, func, write: bool = True, Save_video: bool = False):
+        crop_x = int((self.image_shape[1]/2) * 0.2)
         record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture, Save_video))
-        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func, write, Save_video))
+        view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func, crop_x , write, Save_video))
         self.timer = 20
         timing_thread = threading.Thread(target=self.__timer_sec)
         record_thread.start()
@@ -136,8 +138,7 @@ class Video_operations:
         record_thread.join()
         view_and_send_thread.join()
 
-        
-    def __thread_record_from_camera(self , captrue, Save_video: bool = False):
+    def __thread_record_from_camera(self, captrue, Save_video: bool = False):
         while True:
              
             ret, frame = captrue.read()
@@ -155,12 +156,12 @@ class Video_operations:
                 self.ready_to_read = False
                 self.frame_queue.put(frame)
     
-    def __view_thread_video_and_send_video(self,func, write: bool = True, Save_video: bool = False):
+    def __view_thread_video_and_send_video(self, func, crop_x: int, write: bool = True, Save_video: bool = False):
         while True:
 
             frame = self.frame_queue.get()
             
-            if self.stereo == True:
+            if self.stereo is True:
                 left_frame = self.get_left_image(frame)
                 right_frame = self.get_right_image(frame)
                 if self.flip:
@@ -172,9 +173,9 @@ class Video_operations:
                     frame = cv2.flip(frame, 1)
 
             s = time.time()
-            frame, self.finish_calibration = func(frame)
+            frame, self.finish_calibration = func(frame, crop_x)
             # print((time.time() - s))
-            cv2.imshow("ssss", frame)
+            cv2.imshow("Before Reshape", frame)
 
             self.ready_to_read = True
 
@@ -186,6 +187,8 @@ class Video_operations:
             if write is True:
                 frame = self.reshspe4phone(frame)
                 self.gstreamer_writer.write(frame)
+                if self.gstreamer_writer_2 is not None:
+                    self.gstreamer_writer_2.write(frame)
 
             cv2.namedWindow('Video', cv2.WINDOW_KEEPRATIO)
             cv2.imshow('Video', frame)
@@ -208,7 +211,7 @@ class Video_operations:
 
             suc, img = cap.read()
                
-            func_img = func(img)
+            func_img = func(img, )
             dim = (640, 480)
             func_img_resized = cv2.resize(func_img, dim, interpolation = cv2.INTER_AREA)
             imagenorm = cv2.normalize(func_img_resized, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
@@ -216,9 +219,9 @@ class Video_operations:
             cv2.imshow('Video', func_img)
             cv2.imshow('Original', img)
 
-            key = cv2.waitKey(100)
-            if key == ord('q'):
-                break
+            # key = cv2.waitKey(100)
+            # if key == ord('q'):
+            #     break
 
             
         cap.release()
@@ -234,8 +237,8 @@ class Video_operations:
                     round(left_frame.shape[1] * (1 - crop_factor))]  # [y_start, y_end, x_start, x_end]
         crop_l = left_frame[roi[0]:roi[1], roi[2]:roi[3]]
         crop_r = right_frame[roi[0]:roi[1], roi[2]:roi[3]]
-        mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.05)-3, 3), dtype='uint8')
-        side_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.15), 3), dtype='uint8')
+        mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.1), 3), dtype='uint8')
+        side_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.25)+1, 3), dtype='uint8')
         reshaped = np.concatenate([side_zeros, crop_l, mid_zeros, crop_r, side_zeros], axis=1)
         return reshaped
 
@@ -355,26 +358,13 @@ class Video_operations:
 if __name__ == "__main__":
     
     video = Video_operations()
-    # video.view_video_from_path("regular_video_right.mp4")
-
-    # from Calibration import Calibration
     
-    # cal = Calibration()
-    # cal.load_saved_model('hand_gmm_model.sav')
-    # cal.load_saved_best_labels('hand_best_labels.sav')
+    def empty_func(image: np.array, crop_x: int):
+        return (image, False)
     
-    # from HandOperations import HandOperations
-    
-    # def get_hand_mask(image):
-    #     hand = HandOperations(image=image)
-    #     masked_image = hand.get_hand_mask(cal.get_segmentation(image))
-    #     # count_image = hand.finger_count(masked_image)
-    #     return masked_image
-    
-    # video.save_and_preview_video_from_other_video(get_hand_mask, "regular_video_left.mp4", "masked_regular_video_left.mp4")
-    
-    cap = video.open_gstreamer_video_capture()
-    ret, image = cap.read()
-    # video.view_video(cap)
-    # video.close_gstreamer_video_writer()
+    capture = video.open_gstreamer_video_capture(flip=False)
+        
+    video.start_thread_record_view_send(capture, empty_func, write=False, Save_video=False)
+        
+    video.close_gstreamer_video_capture()
         

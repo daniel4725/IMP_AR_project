@@ -31,7 +31,7 @@ def write(im_l, im_r, txt="3D! Hello"):  # TODO delete
     return im_l, im_r
 
 class AR:
-    def __init__(self, im_l, im_r, static_cam=False):
+    def __init__(self, im_l, im_r, crop_x: int ,static_cam=False):
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")
         # with open(os.path.join(directory, 'corner_follower_l.sav'), 'rb') as handle:
         #     self.corner_follower_l = pickle.load(handle)
@@ -54,7 +54,7 @@ class AR:
         self.dist_map_hands = None
 
         self.application = Application(self.table_map.map)
-        self.state_machine = StateMachine(self.hand_operations, im_l.shape, crop_x=int(im_l.shape[1]*0.3))
+        self.state_machine = StateMachine(self.hand_operations, im_l.shape, crop_x)
 
         # corner following fields:
         self.new_corners_r, self.changed_r = np.zeros((4, 2)), False

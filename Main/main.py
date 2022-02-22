@@ -11,25 +11,26 @@ import numpy as np
 
 class Main():
     def __init__(self):
-        self.state = 2
+        self.state = 0
     
     def main(self):
         self.video = Video_operations()
 
         self.video.open_mp4_video_writer()
-        gstreamer_writer = self.video.open_gstreamer_video_writer("192.168.0.169")
+        self.video.open_gstreamer_video_writer("192.168.0.169")
         capture = self.video.open_gstreamer_video_capture(flip=False)
         # capture = video.open_pc_video_capture(1)
+        
         self.video.start_thread_record_view_send(capture, self.main_state_machine, write=True, Save_video=False)
-        # video.view_and_send_video(gstreamer_capture, gstreamer_writer, test_function)
+        
         self.video.close_gstreamer_video_writer()
         self.video.close_gstreamer_video_capture()
         self.video.close_mp4_video_writer()
         # video.close_pc_video_capture()    
     
-    def main_state_machine(self, frame: np.array):
+    def main_state_machine(self, frame: np.array, crop_x: int):
         if self.state == 0:
-            self.cal = Calibration(self.video, True)
+            self.cal = Calibration(self.video, crop_x, True)
             self.state = 1
             return (frame, False)
         elif self.state == 1:
@@ -40,7 +41,7 @@ class Main():
         elif self.state == 2:
             im_l = self.video.get_left_image(frame)
             im_r = self.video.get_right_image(frame)
-            self.aug_real = AR(im_l, im_r)
+            self.aug_real = AR(im_l, im_r, crop_x=crop_x)
             self.state = 3
             return (frame, False)
         elif self.state == 3:

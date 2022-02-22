@@ -12,22 +12,10 @@ import os
 
 from aux_functions import *
 from table_handling import CornersFollower
-from functools import wraps
-
-
-def measure(func):
-    @wraps(func)
-    def _time_it(*args, **kwargs):
-        start = int(round(time.time() * 1000))
-        try:
-            return func(*args, **kwargs)
-        finally:
-            end_ = int(round(time.time() * 1000)) - start
-            print(f"Total execution time: {end_ if end_ > 0 else 0} ms")
-    return _time_it
 
 class Calibration:
-    def __init__(self, video_operations: Video_operations, stereo: bool = True):
+    
+    def __init__(self, video_operations: Video_operations ,crop_x: int ,stereo: bool = True):
         self.timer = 3
         self.count_down = 3
         self.timer_started = False
@@ -58,23 +46,63 @@ class Calibration:
             7: self.__color_to_vec("tab:pink"),
         }
         self.calibration_state_names = {
-            "get_image_shape"    : 0,
-            "capture_hands"      : 1,
-            "gmm_train"          : 2,
-            "preview_results"    : 3,
-            "check_segmentation" : 4,
-            "finish_calibration" : 5
+            "look_at_table"      : 0,
+            "calibrate_table"    : 1,
+            "preview_corners"    : 2,
+            "get_image_shape"    : 3,
+            "capture_hands"      : 4,
+            "gmm_train"          : 5,
+            "preview_results"    : 6,
+            "check_segmentation" : 7,
+            "finish_calibration" : 8
         }
         self.calibrate_state = self.calibration_state_names["get_image_shape"]
         self.__create_output_directory()
         self.finish_calibration = False
         
+        self.LOC_TITLE = np.array([70 + crop_x, 20])
+        self.LOC1 = np.array([crop_x, 20 + 60])
+        self.LOC2 = np.array([crop_x, 40 + 60])
+        self.LOC3 = np.array([crop_x, 60 + 60])
+        
+        self.offset = 50
+        
+        self.FONT_COLOR = (246, 158, 70)
+        self.font = cv2.FONT_HERSHEY_COMPLEX_SMALL
+        self.size = 0.7
+        self.thick = 1
+        
     def GMM_calibrate(self, image: np.array, Save_model: bool =False):
         return (self.__State_machine(image, self.calibrate_state, self.stereo, Save_model), self.finish_calibration)
         
     def __State_machine(self, image: np.array, state: int, stereo: bool = False, Save_model: bool =False):
-
-        if state == self.calibration_state_names["get_image_shape"]:
+        
+        if state == self.calibration_state_names["look_at_table"]:
+            if self.timer_started is False:
+                self.timer = 1
+                self.count_down = 1
+                self.timing_thread = threading.Thread(target=self.__timer_sec)
+                self.timing_thread.start()
+            if self.timer_finished is True:
+                self.timer_finished = False
+                self.timing_thread.join()
+                self.calibrate_state = self.calibration_state_names["calibrate_table"]
+            return self.__look_at_table(image)
+        elif state == self.calibration_state_names["calibrate_table"]:
+            self.__calibrate_table(image, True)
+            self.calibrate_state = self.calibration_state_names["preview_corners"]
+            return self.__preview_corners(image)
+        elif state == self.calibration_state_names["preview_corners"]:
+            if self.timer_started is False:
+                self.timer = 1
+                self.timing_thread = threading.Thread(target=self.__timer_sec)
+                self.timing_thread.start()
+            if self.timer_finished is True:
+                self.timer_finished = False
+                self.timing_thread.join()
+                self.calibrate_state = self.calibration_state_names["get_image_shape"]
+            return self.corner_result_image
+        elif state == self.calibration_state_names["get_image_shape"]:
             if stereo is True:
                 self.__get_image_from_camera_shape(self.video_operations.get_left_image(image))
             else:
@@ -86,17 +114,18 @@ class Calibration:
         elif state == self.calibration_state_names["capture_hands"]:
             return self.capture_hand(image, True, self.stereo)
         elif state == self.calibration_state_names["gmm_train"]:
-            return self.gmm_train(self.GMM_Image, Save_model)
+            self.gmm_train(self.GMM_Image, Save_model)
+            return image
         elif state == self.calibration_state_names["preview_results"]:
             if self.timer_started is False:
-                self.timer = 20
+                self.timer = 5
                 self.timing_thread = threading.Thread(target=self.__timer_sec)
                 self.timing_thread.start()
             if self.timer_finished is True:
                 self.timer_finished = False
                 self.timing_thread.join()
                 self.calibrate_state = self.calibration_state_names["check_segmentation"]
-            return self.gmm_result_figure
+            return image
         elif state == self.calibration_state_names["check_segmentation"]:
             return self.__check_if_segmentation_is_good(image)
         elif state == self.calibration_state_names["finish_calibration"]:
@@ -110,10 +139,21 @@ class Calibration:
             os.mkdir(self.output_directory_path)
     
     def __look_at_table(self, image: np.array):
-        self.video_operations.draw_text_two_image_or_one(image, "Look at the table please", (0, 50))
-        self.video_operations.draw_text_two_image_or_one(image, f"{self.count_down}", (0, 100))
+        self.draw_text_two_image(image, "Look at the table please", self.LOC_TITLE)
+        self.draw_text_two_image(image, self.count_down, self.LOC1)
         return image
 
+    def draw_text_two_image(self, image: np.array, text: str, position: np.array):
+        left_position = (position[0] + self.offset, position[1])
+        left_image = cv2.putText(self.video_operations.get_left_image(image), f'{text}', left_position, self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+        right_image = cv2.putText(self.video_operations.get_right_image(image), f'{text}', tuple(position), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+        return self.video_operations.image_concat(left_image, right_image)
+
+    def draw_contour_two_image(self, image: np.array, contour: np.array):
+        left_image = self.video_operations.get_left_image(image)
+        right_image = cv2.drawContours(self.video_operations.get_right_image(image), contour, -1, self.FONT_COLOR, self.thick)
+        return self.video_operations.image_concat(left_image, right_image)
+    
     def __preview_corners(self, image: np.array):
         im_l = self.video_operations.get_left_image(image)
         im_r = self.video_operations.get_right_image(image)
@@ -124,12 +164,11 @@ class Calibration:
         self.corner_result_image = self.video_operations.image_concat(im_l, im_r)
         return self.corner_result_image
     
-    @measure
     def __calibrate_table(self, image: np.array, Save_model:bool = False): 
         im_l = self.video_operations.get_left_image(image)
         im_r = self.video_operations.get_right_image(image)
-        self.corner_follower_l = CornersFollower(im_l, show=True, name="c_follow_l")  # Create the corner follower for left image
-        self.corner_follower_r = CornersFollower(im_r, show=True, name="c_follow_r")  # Create the corner follower for right image
+        self.corner_follower_l = CornersFollower(im_l, show=False, name="c_follow_l")  # Create the corner follower for left image
+        self.corner_follower_r = CornersFollower(im_r, show=False, name="c_follow_r")  # Create the corner follower for right image
         if (Save_model):
             # save the model to disk
             filename = 'corner_follower_l.sav'
@@ -158,7 +197,7 @@ class Calibration:
             list: cv2.contuor array with all points of the contour
         """
         zero_image = np.zeros((self.image_shape[0], self.image_shape[1])).astype(np.uint8)
-        self.roi = [round(zero_image.shape[0] * 0.2), round(zero_image.shape[0] * 0.8), round(zero_image.shape[1] * 0.6), round(zero_image.shape[1] * 0.9)]  # [y_start, y_end, x_start, x_end]
+        self.roi = [round(zero_image.shape[0] * 0.2), round(zero_image.shape[0] * 0.8), round(zero_image.shape[1] * 0.55), round(zero_image.shape[1] * 0.75)]  # [y_start, y_end, x_start, x_end]
         cropPrev = zero_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
         crop_shape = cropPrev.shape
         handExample = cv2.imread(os.path.join(self.main_directory, 'Full_hand.jpeg'))
@@ -192,20 +231,22 @@ class Calibration:
         self.timer_started = False
 
     def __check_if_segmentation_is_good(self, image: np.array):
-        self.video_operations.draw_text_two_image_or_one(image, "Is the segmentation good (see only palm)?", (0, 50))
-        self.video_operations.draw_text_two_image_or_one(image, "Press Y/N", (0, 100))
-        key = cv2.waitKey(30)
+        image = self.__preview_calibrated_segmentation(image)
+        self.draw_text_two_image(image, "Is the segmentation good?", self.LOC1)
+        self.draw_text_two_image(image, "(see only hand palm)?", self.LOC2)
+        self.draw_text_two_image(image, "Press Y/N", self.LOC3)
+        key = cv2.waitKey(20)
         if key == 121: # key == Y
             self.calibrate_state = self.calibration_state_names["finish_calibration"]
         elif key == 110: # key == N
             self.calibrate_state = self.calibration_state_names["capture_hands"]
-        return self.__preview_calibrated_segmentation(image)
+        return image
     
     def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
         
         if self.capture_state == 0:
             if stereo is True:
-                capture_image = self.video_operations.get_left_image(image)
+                capture_image = self.video_operations.get_right_image(image)
             else:
                 capture_image = image
             crop_empty_frame = capture_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
@@ -219,7 +260,7 @@ class Calibration:
             self.capture_state = 1
         elif self.capture_state == 1:
             if stereo is True:
-                self.capture_image = self.video_operations.get_left_image(image)
+                self.capture_image = self.video_operations.get_right_image(image)
             else:
                 self.capture_image = image
             crop_frame = self.capture_image[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
@@ -233,21 +274,23 @@ class Calibration:
             if change >= self.tol:
                 self.capture_state = 2
                 self.timing_thread.start()
-            self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
-            self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
+            self.draw_contour_two_image(image, self.hand_contour)
+            self.draw_contour_two_image(image, self.sleeve_contour)
+            self.draw_text_two_image(image, "Put your hand inside", self.LOC1)
+            self.draw_text_two_image(image, "the hand contour", self.LOC2)
         elif self.capture_state == 2:
             if self.count_down != 0:
-                self.video_operations.draw_text_two_image_or_one(image, str(self.count_down), (0, 50), stereo)
-                self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
-                self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
+                self.draw_text_two_image(image, "Put your hand inside", self.LOC1)
+                self.draw_text_two_image(image, "the hand contour", self.LOC2)
+                self.draw_text_two_image(image, str(self.count_down), self.LOC3)
+                self.draw_contour_two_image(image, self.hand_contour)
+                self.draw_contour_two_image(image, self.sleeve_contour)
             elif self.count_down == 0:
                 if stereo is True:
-                    self.GMM_Image = np.array(self.video_operations.get_left_image(image), copy=True)
+                    self.GMM_Image = np.array(self.video_operations.get_right_image(image), copy=True)
                 else:
                     self.GMM_Image = np.array(image, copy=True)
-                self.video_operations.draw_text_two_image_or_one(image, "Image Saved", (0, 50), stereo)
-                self.video_operations.draw_contour_two_image_or_one(image, self.hand_contour, 3, stereo)
-                self.video_operations.draw_contour_two_image_or_one(image, self.sleeve_contour, 3, stereo)
+                self.draw_text_two_image(image, "Image Saved", self.LOC1)
                 self.capture_state = 0
                 self.calibrate_state = self.calibration_state_names["gmm_train"]
                 self.timing_thread.join()
@@ -287,11 +330,11 @@ class Calibration:
         right_image = self.video_operations.image_resize(self.data, 0.7)
 
         self.gmm_result_figure = self.video_operations.image_concat(left_image, right_image)
-        self.calibrate_state = self.calibrate_state = self.calibration_state_names["preview_results"]
-        self.timer_finished = False
-        self.timer = 10
-        self.timing_thread = threading.Thread(target=self.__timer_sec)
-        self.timing_thread.start()
+        self.calibrate_state = self.calibration_state_names["check_segmentation"]
+        # self.timer_finished = False
+        # self.timer = 10
+        # self.timing_thread = threading.Thread(target=self.__timer_sec)
+        # self.timing_thread.start()
         
         return self.gmm_result_figure
         
@@ -304,7 +347,7 @@ class Calibration:
         second_line_image = np.concatenate([crop_by_mask_labels_image, inv_crop_by_mask_labels_image], axis=1)
         second_line_image = self.video_operations.three_dim_image_resize(second_line_image, first_line_image.shape)
         final_image = np.concatenate([first_line_image, second_line_image], axis=0)
-        self.data = cv2.resize(final_image, (segmented_labels.shape[1],segmented_labels.shape[0]))
+        self.data = cv2.resize(final_image, (segmented_labels.shape[1], segmented_labels.shape[0]))
     
     def __print_lables_by_color_name(self, label_list: list):
         print("Choosen colors: ")
@@ -348,8 +391,9 @@ class Calibration:
         return good_label_list
         
     def __preview_calibrated_segmentation(self, image: np.array):
-        Shape = image.shape
-        imageLAB = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        smaller_image = cv2.resize(image, ((image.shape[1] // 2), (image.shape[0] // 2)), interpolation=cv2.INTER_AREA)
+        Shape = smaller_image.shape
+        imageLAB = cv2.cvtColor(smaller_image, cv2.COLOR_BGR2LAB)
 
         L = np.array(imageLAB[:, :, 0]).flatten()
         a = np.array(imageLAB[:, :, 1]).flatten()
@@ -362,7 +406,9 @@ class Calibration:
         
         segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_hand)
         
-        return self.__convert_lables_to_rgb_image(segmented)
+        rgb_image = self.__convert_lables_to_rgb_image(segmented)
+        
+        return cv2.resize(rgb_image, ((image.shape[1]), (image.shape[0])), interpolation=cv2.INTER_AREA)
 
     def __remove_bad_labels(self, main_list: list, second_list: list):
         if (len(main_list) == 1):
@@ -394,7 +440,3 @@ if __name__ == "__main__":
     video.close_gstreamer_video_capture()
     # video.close_pc_video_capture()
     # video.close_video_capture_from_path()
-
-    
-    
-
