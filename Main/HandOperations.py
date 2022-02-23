@@ -63,7 +63,7 @@ class HandOperations:
         imageseg = ImageOperations.morph_close(predicted)
         imageseg = ImageOperations.morph_open(imageseg)
         imagenorm = cv2.normalize(imageseg, None, 255, 0, cv2.NORM_MINMAX, cv2.CV_8UC1)
-        blurred = imagenorm #cv2.GaussianBlur(imagenorm, (3, 3), cv2.BORDER_DEFAULT)
+        blurred = cv2.GaussianBlur(imagenorm, (3, 3), cv2.BORDER_DEFAULT)
         contours, hierarchy = cv2.findContours(blurred, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         mask = np.zeros(image.shape, dtype='uint8')
         if len(contours) > 0:
@@ -209,6 +209,37 @@ class HandOperations:
         if self.numfingers > 5:
             self.numfingers = 0
         return self.numfingers
+
+    def get_tip_mask(self, mask):
+        thick = 15
+        ys, xs = np.where(mask)
+        points = np.array([xs, ys]).T
+        center_x = xs.mean()
+        center_y = ys.mean()
+        center = np.array([[center_x, center_y]])
+        distances = ((points - center) ** 2).sum(axis=1) ** 0.5
+        if distances.shape[0] == 0:
+            return np.zeros_like(mask)
+        tip = points[np.argmax(distances)]
+        tip_map = np.zeros_like(mask)
+
+        # contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # contours = contours[0]
+        # hull = cv2.convexHull(contours, returnPoints=False)
+        # defects = cv2.convexityDefects(contours, hull)
+        # max_defect = max
+        # max_def = defects[np.argmax(defects[:, :, 3]), 0, :]
+        # s, e, f, d = max_def
+        # # start = contours[s][0]
+        # end = contours[e][0]
+        # far = contours[f][0]
+        # distances_end = ((end - center) ** 2).sum() ** 0.5
+        # distances_far = ((far - center) ** 2).sum() ** 0.5
+        # if distances_end > distances_far:
+        #     point = end
+        # else:
+        #     point = far
+        return cv2.circle(tip_map, tuple(tip), thick, 1, -1)
 
 if __name__ == "__main__":
     hand = HandOperations()

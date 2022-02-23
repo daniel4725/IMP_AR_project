@@ -24,7 +24,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 5
+        self.components_number = 4
         self.hand_contour = None
         self.image_shape = None 
         self.capture_state = 0

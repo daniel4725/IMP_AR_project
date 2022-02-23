@@ -11,13 +11,13 @@ import numpy as np
 
 class Main():
     def __init__(self):
-        self.state = 0
+        self.state = 2
     
     def main(self):
         self.video = Video_operations()
 
         self.video.open_mp4_video_writer()
-        self.video.open_gstreamer_video_writer("192.168.0.169")
+        self.video.open_gstreamer_video_writer("192.168.0.169", "192.168.0.141")
         capture = self.video.open_gstreamer_video_capture(flip=False)
         # capture = video.open_pc_video_capture(1)
         
@@ -34,7 +34,7 @@ class Main():
             self.state = 1
             return (frame, False)
         elif self.state == 1:
-            frame, ret = self.cal.GMM_calibrate(frame, Save_model=False)
+            frame, ret = self.cal.GMM_calibrate(frame, Save_model=True)
             if self.video.finish_calibration is True:
                 self.state = 2
             return (frame, ret)

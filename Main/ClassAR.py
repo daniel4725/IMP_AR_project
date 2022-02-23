@@ -37,6 +37,7 @@ class AR:
         #     self.corner_follower_l = pickle.load(handle)
         # with open(os.path.join(directory, 'corner_follower_r.sav'), 'rb') as handle:
         #     self.corner_follower_r = pickle.load(handle)
+        self.use_sleeves = True
 
         self.corner_follower_l = CornersFollower(im_l, static_cam=static_cam, show=True,
                                             name="c_follow_l")  # Create the corner follower for left image
@@ -70,6 +71,7 @@ class AR:
         self.mask_r = None
         self.sleeve_l = None
         self.sleeve_r = None
+        self.cover_l, self.cover_r = None, None
 
     def get_hand_r_seg(self):
         self.mask_r = self.hand_operations.get_hand_mask(self.im_r)
@@ -93,14 +95,14 @@ class AR:
                                        correlation_tolerance=0.4, show=False)
 
     def follow_right_corners(self):
-        self.new_corners_r, self.changed_r = self.corner_follower_r.follow(self.im_r, self.mask_r + self.sleeve_r, show_out=False)
+        self.new_corners_r, self.changed_r = self.corner_follower_r.follow(self.im_r, self.cover_r, show_out=False)
 
     def table_distance_calc(self):
         # following right and left corners in parallel:
         former_corners = (self.corner_follower_l.current_corners.copy(), self.corner_follower_r.current_corners.copy())
         right_corners_thread = threading.Thread(target=self.follow_right_corners)
         right_corners_thread.start()
-        new_corners_l, changed_l = self.corner_follower_l.follow(self.im_l, self.mask_l + self.sleeve_l, show_out=False)
+        new_corners_l, changed_l = self.corner_follower_l.follow(self.im_l, self.cover_l, show_out=False)
         right_corners_thread.join()
 
         if (changed_l and not self.changed_r) or (self.changed_r and not changed_l):
@@ -160,6 +162,10 @@ class AR:
         sleeve_seg_r_thread.join()
         cv2.imshow("hands", np.concatenate([self.mask_l, self.mask_r], axis=1))
         cv2.imshow("sleeves", np.concatenate([self.sleeve_l, self.sleeve_r], axis=1))
+        if self.use_sleeves:
+            self.cover_l, self.cover_r = self.mask_l + self.sleeve_l, self.mask_r + self.sleeve_r  # TODO sleeve on top??
+        else:
+            self.cover_l, self.cover_r = self.mask_l, self.mask_r  # TODO sleeve on top??
 
         # ---------------------- state machine and distances map (hands and table) calculations --------------------
         # starts the hands and the table distance map calculations
@@ -181,21 +187,26 @@ class AR:
 
         # TODO 1.
         # ------------------  compare both distances map to find the touching indexes --------------------
+        tip_map = self.hand_operations.get_tip_mask(self.mask_l)
+        cv2.imshow('tip', tip_map * 255)
         if self.state_machine.state in self.state_machine.ACTIVE_STATES:
-            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands, tolerance=1, show=False)  # TODO: tolerance
+            tip_map = self.hand_operations.get_tip_mask(self.mask_l)
+            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands * tip_map, tolerance=4, show=False)  # TODO: tolerance
         else:
             touch_idxs = np.zeros((0, 2))  # no touches
 
         # ---------------- estimating the transform and projecting the map to the real table  ------------------
-        cover_l, cover_r = self.mask_l + self.sleeve_l, self.mask_r + self.sleeve_r  # TODO sleeve on top??
-        im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, cover_l, cover_r, application=self.application,
+
+
+
+        im_l, im_r = self.table_map.project_map2real(self.im_l, self.im_r, self.cover_l, self.cover_r, application=self.application,
                                                 real_touch_idxs=touch_idxs, touch_indicator=True, show_touch=False)
 
         self.state_machine.add_text(im_l, left=True)
         self.state_machine.add_text(im_r)
 
 
-        if show_dist_map:
+        if True:
             # show distances map
             dist_map = self.dist_map_table.copy()
             dist_map[self.dist_map_hands > 0] = self.dist_map_hands[self.dist_map_hands > 0]

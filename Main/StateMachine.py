@@ -374,6 +374,7 @@ class ClassifierCounter:
             label = self.classifier(img)  # TODO finger counter gets roi only??
         else:
             label = 0
+        print(label)
         self.memory[self.idx] = label
         self.idx = (self.idx + 1) % self.memory_size
         common_label = np.bincount(self.memory).argmax()

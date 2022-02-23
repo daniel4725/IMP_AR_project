@@ -47,7 +47,8 @@ class TabletApp:
         self.touchscreen = TouchScreen()
         self.region = (self.x, self.y, self.x + self.width, self.y + self.height)
 
-        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-P610' in title][0]
+        # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-P610' in title][0]
+        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-T860' in title][0]
         # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
         self.hwnd = tablet_window[0]
         win32gui.MoveWindow(self.hwnd, 0, 0, map.shape[1] + 2 * sides_size, map.shape[0] + sides_size + upper_bar_size, True)

@@ -126,10 +126,10 @@ class Video_operations:
         cv2.destroyAllWindows()
         
     def start_thread_record_view_send(self, capture, func, write: bool = True, Save_video: bool = False):
-        crop_x = int((self.image_shape[1]/2) * 0.2)
+        crop_x = int((self.image_shape[1]/2) * 0.3)
         record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture, Save_video))
         view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func, crop_x , write, Save_video))
-        self.timer = 20
+        self.timer = 90
         timing_thread = threading.Thread(target=self.__timer_sec)
         record_thread.start()
         view_and_send_thread.start()
