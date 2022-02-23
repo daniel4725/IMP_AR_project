@@ -28,6 +28,7 @@ class StateMachine:
     PURPLE = 5
 
     FONT_COLOR = (246, 158, 70)
+    COLOR2 = (117, 4, 129)
     font = cv2.FONT_HERSHEY_COMPLEX_SMALL
     size = 0.7
     thick = 1
@@ -49,10 +50,10 @@ class StateMachine:
         self.former_state = self.MAIN_MENU
         self.classifier_roi = [130, 230, shape[1]//2 - 60 + 30, shape[1]//2 + 60 + 30]  # [y_start, y_end, x_start, x_end]
         # back_roi = [0, 40, shape[1]-crop_x - 40, shape[1]-crop_x]
-        back_roi = [0, 40, crop_x + 50, crop_x + 40 + 50]
+        back_roi = [0, 40, crop_x - 40, crop_x + 40 - 40]
         back_dim = (back_roi[3] - back_roi[2], back_roi[1] - back_roi[0])
         self.back_button_roi = back_roi
-        renew_table_roi = [0, 40, crop_x, crop_x + 40]
+        renew_table_roi = [0, 40, crop_x + 50, crop_x + 40 + 50]
         self.renew_table_roi = renew_table_roi
         directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
         back_img = cv2.imread(os.path.join(directory, "back.png"))
@@ -63,6 +64,17 @@ class StateMachine:
         self.delay_between_states = 2
         self.state_changed = False
         self.saved_choice = 0
+
+        self.img_roi = [0 + 80, 40 + 80, crop_x, crop_x + 40]
+        img_dim = (self.img_roi[3] - self.img_roi[2], self.img_roi[1] - self.img_roi[0])
+        square_img = cv2.imread(os.path.join(directory, "square.jpeg"))
+        self.square_img = cv2.resize(square_img, img_dim, interpolation=cv2.INTER_AREA)
+        triangle_img = cv2.imread(os.path.join(directory, "triangle.jpeg"))
+        self.triangle_img = cv2.resize(triangle_img, img_dim, interpolation=cv2.INTER_AREA)
+        circle_img = cv2.imread(os.path.join(directory, "circle.jpeg"))
+        self.circle_img = cv2.resize(circle_img, img_dim, interpolation=cv2.INTER_AREA)
+        smilie_img = cv2.imread(os.path.join(directory, "smilie.jpeg"))
+        self.smilie_img = cv2.resize(smilie_img, img_dim, interpolation=cv2.INTER_AREA)
 
         classifier_roi_2_counter = np.array(self.classifier_roi, copy=True)
         classifier_roi_2_counter[3] += self.offset
@@ -184,7 +196,12 @@ class StateMachine:
 
         if self.in_delay or self.state_changed:
             if (self.state in [self.SHAPE_MANIPULATION, self.PAINT_MENU]) and (self.saved_choice != 0):
-                cv2.putText(frame, self.saved_choice, tuple(self.loc_CENTER_SHAPE), self.font, 3, self.FONT_COLOR, 4, cv2.LINE_4)
+                size = 1
+                thick = 2
+                location = self.loc3
+                spaces = "       "
+                color = self.COLOR2
+                cv2.putText(frame, spaces + self.saved_choice, tuple(location), self.font, size, color, thick, cv2.LINE_4)
             else:
                 self.write_state_on_frame(frame)
 
@@ -207,14 +224,17 @@ class StateMachine:
             self.add_renew_button(frame, left)
         elif self.state == self.TABLET:
             cv2.putText(frame, "Tablet", tuple(self.loc_TITLE), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Put fist to go back', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             self.add_back_button(frame, left)
             self.add_renew_button(frame, left)
 
         elif self.state == self.INSERT_SHAPE:
+            self.draw_shape_images(frame, left)
+            spaces = "     "
             cv2.putText(frame, "Insert Shape", tuple(self.loc_TITLE), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Draw shape with hands', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Put fist to go back ', tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + 'Smilie', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + 'Triangle', tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + 'Circle', tuple(self.loc3), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + 'Square', tuple(self.loc4), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             self.add_roi_rectangle(frame, self.classifier_roi, left=left)
             self.add_back_button(frame, left)
             self.add_renew_button(frame, left)
@@ -222,14 +242,12 @@ class StateMachine:
         elif self.state == self.DELETE_SHAPE:
             cv2.putText(frame, "Delete Shapes", tuple(self.loc_TITLE), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             cv2.putText(frame, 'Touch shape to delete', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Put fist to go back ', tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             self.add_back_button(frame, left)
             self.add_renew_button(frame, left)
 
         elif self.state == self.SHAPE_MANIPULATION:
             cv2.putText(frame, "Shape Manipulation", tuple(self.loc_TITLE), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             cv2.putText(frame, 'Touch shape to move', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Put fist to go back ', tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             self.add_back_button(frame, left)
             self.add_renew_button(frame, left)
 
@@ -248,9 +266,25 @@ class StateMachine:
         elif self.state == self.DRAW:
             cv2.putText(frame, "Draw", tuple(self.loc_TITLE), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             cv2.putText(frame, 'Draw on table', tuple(self.loc1), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
-            cv2.putText(frame, 'Put fist to go back ', tuple(self.loc2), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
             self.add_back_button(frame, left)
             self.add_renew_button(frame, left)
+
+    def draw_shape_images(self, frame, left: bool = False):
+        roi = np.array(self.img_roi, copy=True)
+        if not left:
+            roi[2] -= self.offset
+            roi[3] -= self.offset
+        offset = 42
+        frame[roi[0]: roi[1], roi[2]: roi[3]] = self.smilie_img
+        frame[offset + roi[0]: offset + roi[1], roi[2]: roi[3]] = self.triangle_img
+        frame[offset * 2 + roi[0]: offset * 2 + roi[1], roi[2]: roi[3]] = self.circle_img
+        frame[offset * 3 + roi[0]: offset * 3 + roi[1], roi[2]: roi[3]] = self.square_img
+
+        diff = 15
+        self.loc1[1] = roi[0] + diff
+        self.loc2[1] = roi[0] + offset + diff
+        self.loc3[1] = roi[0] + offset * 2 + diff
+        self.loc4[1] = roi[0] + offset * 3 + diff
 
     def change_use_locations(self, left: bool = False):
         if left:
@@ -277,32 +311,39 @@ class StateMachine:
     def write_state_on_frame(self, frame):
         size = 1
         thick = 2
+        location = self.loc3
+        spaces = "       "
+        color = self.COLOR2
         if self.state == self.PAINT_MENU:
-            cv2.putText(frame, "Paint Menu", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Paint Menu", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.SHAPE_MANIPULATION:
-            cv2.putText(frame, "Shape Manipulation", tuple(self.LOC_CENTER_SHAPE_MANI), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, "Shape Manipulation", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.CHANGE_COLOR:
-            cv2.putText(frame, "Change Color", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Change Color", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.DELETE_SHAPE:
-            cv2.putText(frame, "Delete Shapes", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Delete Shapes", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.DRAW:
-            cv2.putText(frame, "Draw", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Draw", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.INSERT_SHAPE:
-            cv2.putText(frame, "Insert Shape", tuple(self.LOC_CENTER_SHAPE_INSERT), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Insert Shape", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.TABLET:
-            cv2.putText(frame, "Tablet", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Tablet", tuple(location), self.font, size, color, thick, cv2.LINE_4)
         elif self.state == self.MAIN_MENU:
-            cv2.putText(frame, "Main Menu", tuple(self.LOC_CENTER_SHAPE), self.font, size, self.FONT_COLOR, thick, cv2.LINE_4)
+            cv2.putText(frame, spaces + "Main Menu", tuple(location), self.font, size, color, thick, cv2.LINE_4)
 
     def add_roi_rectangle(self, frame, roi, text=None, left: bool = False):
         # TODO add text on the Roi
+        if left:
+            return
         show_roi = np.array(roi, copy=True)
         if left:
             show_roi[2] += self.offset
             show_roi[3] += self.offset
-        cv2.rectangle(frame, (show_roi[2], show_roi[0]), (show_roi[3], show_roi[1]), (0, 255, 0), 0)  # (top left corner),(bottom right corner)
+        cv2.rectangle(frame, (show_roi[2], show_roi[0]), (show_roi[3], show_roi[1]), (51, 22, 198), 0)  # (top left corner),(bottom right corner)
         
     def add_back_button(self, frame, left: bool = False):
+        if not left:
+            return
         roi = np.array(self.back_button_roi, copy=True)
         if not left:
             roi[2] -= self.offset
@@ -310,6 +351,8 @@ class StateMachine:
         frame[roi[0]: roi[1], roi[2]: roi[3]] = self.back_img
 
     def add_renew_button(self, frame, left: bool = False):
+        if not left:
+            return
         roi = np.array(self.renew_table_roi, copy=True)
         if not left:
             roi[2] -= self.offset

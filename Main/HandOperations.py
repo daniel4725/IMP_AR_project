@@ -144,7 +144,15 @@ class HandOperations:
         prediction = self.svm.predict(pre_features)
         prediction = int(prediction[0])
         # prediction = self.name_dict[str(prediction)]
-        return prediction
+
+        """
+            "0": "smilie",
+            "1": "triangle",
+            "2": "circle",
+            "3": "square",
+        """
+        predict_dict = {0: 4, 1: 1, 2: 2, 3: 3}
+        return predict_dict[prediction]
 
     # def capture_image(self):
     #     cap = cv2.VideoCapture(0)

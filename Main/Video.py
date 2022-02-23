@@ -23,10 +23,10 @@ class Video_operations:
         self.image_shape = (320,1280)
     
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", IP_2: str = ''):
-        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
+        self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=4000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
 
         if IP_2 != '':
-            self.gstreamer_writer_2 = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=2000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP_2 + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
+            self.gstreamer_writer_2 = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=4000 speed-preset=ultrafast key-int-max=12 cabac=1 bframes=2 ! rtph264pay ! udpsink host=' + IP_2 + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
         if not self.gstreamer_writer.isOpened():
             print('VideoWriter not opened')
             exit(0)
@@ -237,8 +237,8 @@ class Video_operations:
                     round(left_frame.shape[1] * (1 - crop_factor))]  # [y_start, y_end, x_start, x_end]
         crop_l = left_frame[roi[0]:roi[1], roi[2]:roi[3]]
         crop_r = right_frame[roi[0]:roi[1], roi[2]:roi[3]]
-        mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.1), 3), dtype='uint8')
-        side_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.25)+1, 3), dtype='uint8')
+        mid_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.1 + 10), 3), dtype='uint8')
+        side_zeros = np.zeros((crop_l.shape[0], round(crop_l.shape[1] * 0.25)+1 - 5, 3), dtype='uint8')
         reshaped = np.concatenate([side_zeros, crop_l, mid_zeros, crop_r, side_zeros], axis=1)
         return reshaped
 

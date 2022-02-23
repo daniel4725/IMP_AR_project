@@ -11,7 +11,7 @@ import numpy as np
 
 class Main():
     def __init__(self):
-        self.state = 2
+        self.state = 0
     
     def main(self):
         self.video = Video_operations()

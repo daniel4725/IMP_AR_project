@@ -13,7 +13,7 @@ win32gui.EnumWindows(enum_cb, toplist)
 
 
 class TouchScreen:
-    def __init__(self, click_sustain=3, max_clicks_dist=50): # TODO use the max dist or not?
+    def __init__(self, click_sustain=5, max_clicks_dist=50): # TODO use the max dist or not?
         # TODO doc.   click_sustain: the number of updates that a click stays clicked (sustained) after no new touches
         self.clicked = False
         self.click_location = np.zeros([0, 2])
@@ -48,8 +48,8 @@ class TabletApp:
         self.region = (self.x, self.y, self.x + self.width, self.y + self.height)
 
         # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-P610' in title][0]
-        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-T860' in title][0]
-        # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
+        # tablet_window = [(hwnd, title) for hwnd, title in winlist if 'SM-T860' in title][0]
+        tablet_window = [(hwnd, title) for hwnd, title in winlist if 'Tablet' in title][0]
         self.hwnd = tablet_window[0]
         win32gui.MoveWindow(self.hwnd, 0, 0, map.shape[1] + 2 * sides_size, map.shape[0] + sides_size + upper_bar_size, True)
         # ScreenToClient
@@ -71,7 +71,7 @@ class TabletApp:
             mouse.release("left")
         elif clicked_before and clicked_now:  # the mouse is down already - just move it
             dx, dy = self.touchscreen.click_location
-            mouse.move(self.x + dx, self.y + dy)
+            mouse.move(self.x + dx, self.y + dy, duration=0.01)
 
     def move_to_front(self):
         win32gui.SetForegroundWindow(self.hwnd)
@@ -134,7 +134,7 @@ class PaintApp:
                 pyautogui.press('delete')
         elif clicked_before and clicked_now:  # the mouse is down already - just move it
             dx, dy = self.touchscreen.click_location
-            mouse.move(self.x + dx, self.y + dy)
+            mouse.move(self.x + dx, self.y + dy, duration=0.01)
 
     def insert_shape(self, shape):
         x, y = self.buttons_loc_dict["home"]

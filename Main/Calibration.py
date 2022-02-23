@@ -24,7 +24,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 4
+        self.components_number = 3
         self.hand_contour = None
         self.image_shape = None 
         self.capture_state = 0
@@ -37,11 +37,11 @@ class Calibration:
         self.data = None
         self.label_to_color = {
             0: self.__color_to_vec("black"),
-            1: self.__color_to_vec("tab:blue"),
+            1: self.__color_to_vec("tab:purple"),
             2: self.__color_to_vec("tab:orange"),
             3: self.__color_to_vec("tab:green"),
             4: self.__color_to_vec("tab:red"),
-            5: self.__color_to_vec("tab:purple"),
+            5: self.__color_to_vec("tab:blue"),
             6: self.__color_to_vec("tab:brown"),
             7: self.__color_to_vec("tab:pink"),
         }
@@ -64,6 +64,8 @@ class Calibration:
         self.LOC1 = np.array([crop_x, 20 + 60])
         self.LOC2 = np.array([crop_x, 40 + 60])
         self.LOC3 = np.array([crop_x, 60 + 60])
+        self.LOC4 = np.array([crop_x, 80 + 60])
+        self.LOC5 = np.array([crop_x, 100 + 60])
         
         self.offset = 50
         
@@ -112,7 +114,9 @@ class Calibration:
             self.calibrate_state = self.calibration_state_names["capture_hands"]
             return image
         elif state == self.calibration_state_names["capture_hands"]:
-            return self.capture_hand(image, True, self.stereo)
+            image = self.capture_hand(image, True, self.stereo)
+            image[:, :image.shape[1]//2] = 0
+            return image
         elif state == self.calibration_state_names["gmm_train"]:
             self.gmm_train(self.GMM_Image, Save_model)
             return image
@@ -235,6 +239,8 @@ class Calibration:
         self.draw_text_two_image(image, "Is the segmentation good?", self.LOC1)
         self.draw_text_two_image(image, "(see only hand palm)?", self.LOC2)
         self.draw_text_two_image(image, "Press Y/N", self.LOC3)
+        self.draw_text_two_image(image, f"{self.hand_colors_strings}", self.LOC4)
+        self.draw_text_two_image(image, f"{self.sleeve_colors_strings}" , self.LOC5)
         key = cv2.waitKey(20)
         if key == 121: # key == Y
             self.calibrate_state = self.calibration_state_names["finish_calibration"]
@@ -278,6 +284,7 @@ class Calibration:
             self.draw_contour_two_image(image, self.sleeve_contour)
             self.draw_text_two_image(image, "Put your hand inside", self.LOC1)
             self.draw_text_two_image(image, "the hand contour", self.LOC2)
+
         elif self.capture_state == 2:
             if self.count_down != 0:
                 self.draw_text_two_image(image, "Put your hand inside", self.LOC1)
@@ -299,6 +306,7 @@ class Calibration:
     def gmm_train(self, GMM_image: np.array, Save_model: bool = True):
         Shape = GMM_image.shape
         imageLAB = cv2.cvtColor(GMM_image, cv2.COLOR_BGR2LAB)
+        # imageLAB = GMM_image
 
         L = np.array(imageLAB[:, :, 0]).flatten()
         a = np.array(imageLAB[:, :, 1]).flatten()
@@ -314,6 +322,10 @@ class Calibration:
         
         self.two_comp_label_list_hand = self.__get_most_valued_gmm_labels(segmented_labels, self.mask)
         self.two_comp_label_list_sleeve = self.__get_most_valued_gmm_labels(segmented_labels, self.sleeve_mask)
+
+        self.hand_colors_strings = "Hand: " + ", ".join(list(map(lambda label: (self.label_to_color[label])[1].replace('tab:', ''), self.two_comp_label_list_hand)))
+        self.sleeve_colors_strings = "Sleeve: " + ", ".join(list(map(lambda label: (self.label_to_color[label])[1].replace('tab:', ''), self.two_comp_label_list_sleeve)))
+
         segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_hand)
 
         if (Save_model):
@@ -360,8 +372,8 @@ class Calibration:
 
         for gray, rgb in self.label_to_color.items():
             img_rgb[labled_image == gray, :] = rgb[0]
-        
-        return img_rgb        
+
+        return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     
     def __color_to_vec(self, color: str):
         return (tuple([int(255*x) for x in colors.to_rgb(color)]), color)
@@ -394,6 +406,7 @@ class Calibration:
         smaller_image = cv2.resize(image, ((image.shape[1] // 2), (image.shape[0] // 2)), interpolation=cv2.INTER_AREA)
         Shape = smaller_image.shape
         imageLAB = cv2.cvtColor(smaller_image, cv2.COLOR_BGR2LAB)
+        # imageLAB = smaller_image
 
         L = np.array(imageLAB[:, :, 0]).flatten()
         a = np.array(imageLAB[:, :, 1]).flatten()
@@ -406,7 +419,7 @@ class Calibration:
         
         segmented = self.__get_two_comp_segmentation(segmented_labels, self.two_comp_label_list_hand)
         
-        rgb_image = self.__convert_lables_to_rgb_image(segmented)
+        rgb_image = self.__convert_lables_to_rgb_image(segmented_labels)
         
         return cv2.resize(rgb_image, ((image.shape[1]), (image.shape[0])), interpolation=cv2.INTER_AREA)
 
