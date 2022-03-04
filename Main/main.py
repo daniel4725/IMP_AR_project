@@ -7,13 +7,17 @@ from ClassAR import AR
 import cv2
 import numpy as np
 
-
-
 class Main():
+    """
+    Main class.
+    """
     def __init__(self):
         self.state = 0
     
     def main(self):
+        """
+        main Main function that open captures and writers, and then run the main state machine.
+        """
         self.video = Video_operations()
 
         self.video.open_mp4_video_writer()
@@ -29,6 +33,16 @@ class Main():
         # video.close_pc_video_capture()    
     
     def main_state_machine(self, frame: np.array, crop_x: int):
+        """
+        main_state_machine state machine that connects calibration and main app together. This function sends to the Video operations class.
+
+        Args:
+            frame (np.array): image from a capture.
+            crop_x (int): _description_
+
+        Returns:
+            np.array: processed image from the state machine.
+        """
         if self.state == 0:
             self.cal = Calibration(self.video, crop_x, True)
             self.state = 1

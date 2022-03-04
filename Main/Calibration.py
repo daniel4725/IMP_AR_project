@@ -379,6 +379,15 @@ class Calibration:
         return (tuple([int(255*x) for x in colors.to_rgb(color)]), color)
         
     def __count_labels(self, prediction: np.array):
+        """
+        __count_labels Count all values (lables) and select the most counted label and at least 25% of counts of the most counted label.
+
+        Args:
+            prediction (np.array): segmented image with labels.
+
+        Returns:
+            List: chosen labels.
+        """
         unique, counts = np.unique(prediction, return_counts=True)
         label_dict = dict(zip(unique, counts))
         del label_dict[0]
@@ -403,6 +412,16 @@ class Calibration:
         return good_label_list
         
     def __preview_calibrated_segmentation(self, image: np.array):
+        """
+        __preview_calibrated_segmentation Predict segmentation in image using trained GMM model after resizing to smaller image to speedup the process.
+
+        Args:
+            image (np.array): regular image.
+
+        Returns:
+            np.array: rgb image of the segmented image.
+        """
+        
         smaller_image = cv2.resize(image, ((image.shape[1] // 2), (image.shape[0] // 2)), interpolation=cv2.INTER_AREA)
         Shape = smaller_image.shape
         imageLAB = cv2.cvtColor(smaller_image, cv2.COLOR_BGR2LAB)
@@ -422,19 +441,18 @@ class Calibration:
         rgb_image = self.__convert_lables_to_rgb_image(segmented_labels)
         
         return cv2.resize(rgb_image, ((image.shape[1]), (image.shape[0])), interpolation=cv2.INTER_AREA)
-
-    def __remove_bad_labels(self, main_list: list, second_list: list):
-        if (len(main_list) == 1):
-            return main_list
-        else:
-            for i in range(len(second_list)):
-                try:
-                    main_list.remove(second_list[i])
-                except:
-                    pass
-            return main_list
     
-    def __get_two_comp_segmentation(self, n_comp_segmented_img: np.array, two_comp_label_list):
+    def __get_two_comp_segmentation(self, n_comp_segmented_img: np.array, two_comp_label_list: list):
+        """
+        __get_two_comp_segmentation This function create new image with only two labels of main intrest and background.
+
+        Args:
+            n_comp_segmented_img (np.array): Labled image from GMM prediction.
+            two_comp_label_list (list): List with all the lables of the main interst.
+
+        Returns:
+            np.array: Image with the labels main intrest and background.
+        """
         reduced_GMM_Labels_segmented_img = np.zeros(n_comp_segmented_img.shape)
         reduced_GMM_Labels_segmented_img[np.isin(n_comp_segmented_img, two_comp_label_list)] = 1
         return reduced_GMM_Labels_segmented_img
