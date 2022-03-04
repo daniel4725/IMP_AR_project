@@ -14,8 +14,20 @@ from aux_functions import *
 from table_handling import CornersFollower
 
 class Calibration:
+    """
+     This class preform full calibration of the AR system. The calibration is most for getting hand and sleeve segmentation for the main app.
+     The segmentation is with Gaussian Mixture Model.
+    """
     
     def __init__(self, video_operations: Video_operations ,crop_x: int ,stereo: bool = True):
+        """
+        __init__ Init calibration instance.
+
+        Args:
+            video_operations (Video_operations): Get Video operation instance.
+            crop_x (int): Amount of cropping of the image.
+            stereo (bool, optional): Check if the image is stereo image. Defaults to True.
+        """
         self.timer = 3
         self.count_down = 3
         self.timer_started = False
@@ -74,10 +86,32 @@ class Calibration:
         self.size = 0.7
         self.thick = 1
         
-    def GMM_calibrate(self, image: np.array, Save_model: bool =False):
+    def GMM_calibrate(self, image: np.array, Save_model: bool = False):
+        """
+        GMM_calibrate Start the calibration by calling to state machine.
+
+        Args:
+            image (np.array): 3 channel image
+            Save_model (bool, optional): Check if to save the trained model. Defaults to False.
+
+        Returns:
+            np.array: image.
+        """
         return (self.__State_machine(image, self.calibrate_state, self.stereo, Save_model), self.finish_calibration)
         
-    def __State_machine(self, image: np.array, state: int, stereo: bool = False, Save_model: bool =False):
+    def __State_machine(self, image: np.array, state: int, stereo: bool = False, Save_model: bool = False):
+        """
+        __State_machine Change states in calibration.
+
+        Args:
+            image (np.array): regular image.
+            state (int): The current state.
+            stereo (bool, optional): Check if image is stereo image. Defaults to False.
+            Save_model (bool, optional): Check if to save the trained model. Defaults to False.
+
+        Returns:
+           np.array: image.
+        """
         
         if state == self.calibration_state_names["look_at_table"]:
             if self.timer_started is False:
@@ -137,28 +171,70 @@ class Calibration:
             return image
     
     def __create_output_directory(self):
+        """
+        __create_output_directory Create output directory with the GMM model and chosen lables for hand and sleeve.
+        """
         self.main_directory = os.path.dirname(os.path.abspath(__file__))
         self.output_directory_path = os.path.join(self.main_directory, "calibration_output")
         if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration_output")) is False:
             os.mkdir(self.output_directory_path)
     
     def __look_at_table(self, image: np.array):
+        """
+        __look_at_table Draw on the image title and count down.
+
+        Args:
+            image (np.array): _description_
+
+        Returns:
+            np.array: image.
+        """
         self.draw_text_two_image(image, "Look at the table please", self.LOC_TITLE)
         self.draw_text_two_image(image, self.count_down, self.LOC1)
         return image
 
     def draw_text_two_image(self, image: np.array, text: str, position: np.array):
+        """
+        draw_text_two_image Draw on the stereo image text with offset for AR.
+
+        Args:
+            image (np.array): Regular image.
+            text (str): Required text to draw.
+            position (np.array): Position on the image.
+
+        Returns:
+            np.array: image with text.
+        """
         left_position = (position[0] + self.offset, position[1])
         left_image = cv2.putText(self.video_operations.get_left_image(image), f'{text}', left_position, self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
         right_image = cv2.putText(self.video_operations.get_right_image(image), f'{text}', tuple(position), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
         return self.video_operations.image_concat(left_image, right_image)
 
     def draw_contour_two_image(self, image: np.array, contour: np.array):
+        """
+        draw_contour_two_image Draw on the stereo image contour with offset for AR.
+
+        Args:
+            image (np.array): Regular image.
+            contour (np.array): The required shape.
+
+        Returns:
+            np.array: image with contour.
+        """
         left_image = self.video_operations.get_left_image(image)
         right_image = cv2.drawContours(self.video_operations.get_right_image(image), contour, -1, self.FONT_COLOR, self.thick)
         return self.video_operations.image_concat(left_image, right_image)
     
     def __preview_corners(self, image: np.array):
+        """
+        __preview_corners Preview table segmentation on the image. 
+
+        Args:
+            image (np.array): Regular Image.
+
+        Returns:
+            np.array: image with corners mark.
+        """
         im_l = self.video_operations.get_left_image(image)
         im_r = self.video_operations.get_right_image(image)
         for i, (p1, p2) in enumerate(zip(self.corner_follower_l.current_corners, np.roll(self.corner_follower_l.current_corners, shift=1, axis=0))):
@@ -169,6 +245,13 @@ class Calibration:
         return self.corner_result_image
     
     def __calibrate_table(self, image: np.array, Save_model:bool = False): 
+        """
+        __calibrate_table Get table segmentation.
+
+        Args:
+            image (np.array): Regular Image.
+            Save_model (bool, optional): Check if to save the trained model. Defaults to False.
+        """
         im_l = self.video_operations.get_left_image(image)
         im_r = self.video_operations.get_right_image(image)
         self.corner_follower_l = CornersFollower(im_l, show=False, name="c_follow_l")  # Create the corner follower for left image
@@ -227,6 +310,9 @@ class Calibration:
         return mask
 
     def __timer_sec(self):
+        """
+        __timer_sec Timer
+        """
         self.timer_started = True
         for i in range(self.timer):
             time.sleep(1)
@@ -235,6 +321,15 @@ class Calibration:
         self.timer_started = False
 
     def __check_if_segmentation_is_good(self, image: np.array):
+        """
+        __check_if_segmentation_is_good This state draw on the image a query if the hand and sleeve segmentation is good.
+
+        Args:
+            image (np.array): Regular image.
+
+        Returns:
+            np.array: segmented image.
+        """
         image = self.__preview_calibrated_segmentation(image)
         self.draw_text_two_image(image, "Is the segmentation good?", self.LOC1)
         self.draw_text_two_image(image, "(see only hand palm)?", self.LOC2)
@@ -249,6 +344,17 @@ class Calibration:
         return image
     
     def capture_hand(self, image: np.array, print_roi_match: bool = False, stereo: bool = False):
+        """
+        capture_hand State machine to capture the image with hand getting inside an roi and then countdown until taking the image.
+
+        Args:
+            image (np.array): Regular image
+            print_roi_match (bool, optional): Check if to print the match between the hand and the ROI. Defaults to False.
+            stereo (bool, optional): Check if the image is stereo image. Defaults to False.
+
+        Returns:
+            np.array: image with text and contour.
+        """
         
         if self.capture_state == 0:
             if stereo is True:
@@ -304,6 +410,16 @@ class Calibration:
         return image
         
     def gmm_train(self, GMM_image: np.array, Save_model: bool = True):
+        """
+        gmm_train The GMM train process.
+
+        Args:
+            GMM_image (np.array): Image with hand inside the ROI.
+            Save_model (bool, optional): Check if to save the trained model. Defaults to True.
+
+        Returns:
+            _type_: _description_
+        """
         Shape = GMM_image.shape
         imageLAB = cv2.cvtColor(GMM_image, cv2.COLOR_BGR2LAB)
         # imageLAB = GMM_image
@@ -343,14 +459,18 @@ class Calibration:
 
         self.gmm_result_figure = self.video_operations.image_concat(left_image, right_image)
         self.calibrate_state = self.calibration_state_names["check_segmentation"]
-        # self.timer_finished = False
-        # self.timer = 10
-        # self.timing_thread = threading.Thread(target=self.__timer_sec)
-        # self.timing_thread.start()
         
         return self.gmm_result_figure
         
-    def __create_multiple_image(self, segmented_labels, GMM_image, segmented):    
+    def __create_multiple_image(self, segmented_labels: np.array, GMM_image: np.array, segmented: np.array):
+        """
+        __create_multiple_image Create an image with multiple small images inside.
+
+        Args:
+            segmented_labels (np.array): _description_
+            GMM_image (np.array): Regular image.
+            segmented (np.array): Segmented image.
+        """
         segmented_labels_image = self.__convert_lables_to_rgb_image(segmented_labels)
         two_lables_image = self.__convert_lables_to_rgb_image(segmented)
         first_line_image = np.concatenate([GMM_image, segmented_labels_image, two_lables_image], axis=1)
@@ -362,11 +482,26 @@ class Calibration:
         self.data = cv2.resize(final_image, (segmented_labels.shape[1], segmented_labels.shape[0]))
     
     def __print_lables_by_color_name(self, label_list: list):
+        """
+        __print_lables_by_color_name Print the color of each label.
+
+        Args:
+            label_list (list): label list.
+        """
         print("Choosen colors: ")
         for label in label_list:
             print((self.label_to_color[label + 1])[1])
     
     def __convert_lables_to_rgb_image(self, labled_image: np.array):
+        """
+        __convert_lables_to_rgb_image Convert each labled pixel to 3 RGB pixel.
+
+        Args:
+            labled_image (np.array): labled_image
+
+        Returns:
+            np.array: RGB image.
+        """
         h, w = labled_image.shape
         img_rgb = np.zeros((h, w, 3), dtype=np.uint8)
 
@@ -376,6 +511,15 @@ class Calibration:
         return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
     
     def __color_to_vec(self, color: str):
+        """
+        __color_to_vec Convert color name to RGB tuple with 0-255 values.
+
+        Args:
+            color (str): Color name.
+
+        Returns:
+            tuple: RGB 3-cjannels tuple.
+        """
         return (tuple([int(255*x) for x in colors.to_rgb(color)]), color)
         
     def __count_labels(self, prediction: np.array):
@@ -400,6 +544,16 @@ class Calibration:
         return label_list
     
     def __get_most_valued_gmm_labels(self, n_comp_segmented_img: np.array, contour_mask):
+        """
+        __get_most_valued_gmm_labels Check what are the most counted labels inside the contour.
+
+        Args:
+            n_comp_segmented_img (np.array): labled image.
+            contour_mask (contour): contour.
+
+        Returns:
+            list: chosen label list.
+        """
         ret, mask = cv2.threshold(contour_mask, 10, 255, cv2.THRESH_BINARY)
         mask_inv = cv2.bitwise_not(mask)
         img = n_comp_segmented_img + 1
