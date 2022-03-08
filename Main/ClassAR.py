@@ -6,29 +6,7 @@ import threading
 from StateMachine import StateMachine
 from HandOperations import HandOperations
 import os
-import pickle
 
-# TODO:
-#  1. handle the sleeve mask
-#  2. renew seg mask - differet function, delay there and when to do?.
-
-def write(im_l, im_r, txt="3D! Hello"):  # TODO delete
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    start = 80
-    offset = 200
-    # org
-    org_r = (start, 100)
-    org_l = (start + offset, 100)
-    # fontScale
-    fontScale = 1
-    # Red color in BGR
-    color = (0, 0, 255)
-    # Line thickness of 2 px
-    thickness = 2
-    # Using cv2.putText() method
-    im_l = cv2.putText(im_l, txt, org_l, font, fontScale, color, thickness, cv2.LINE_AA, False)
-    im_r = cv2.putText(im_r, txt, org_r, font, fontScale, color, thickness, cv2.LINE_AA, False)
-    return im_l, im_r
 
 class AR:
     def __init__(self, im_l, im_r, crop_x: int = 0, static_cam=False):
