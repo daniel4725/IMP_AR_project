@@ -65,19 +65,14 @@ class TableMap:
                 cv2.circle(touch_map, center_coordinates, radius, color, thickness)
             cv2.imshow("touch map", touch_map)
 
-        # start_clk = time.time()  # TODO delete
-        # transforming the table map to the real table
 
-        # start_clk2 = time.time()  # TODO delete
         tformed_map_left = cv2.warpPerspective(self.whole_map, np.linalg.inv(tform_mat_l), (im_l.shape[1], im_l.shape[0]))
         indexes = (tformed_map_left != [0, 0, 0]) * (mask_l[:, :, None] == 0)
         indexes = indexes[:, :, 0] + indexes[:, :, 1] + indexes[:, :, 2]
         im_l[indexes, :] = tformed_map_left[indexes, :]
-        # print(f"------------tform time: {time.time() - start_clk2}------------------") # TODO delete
 
         project_map_2_im_r.join()
         im_r = im_r_lst[0]
-        # print(f"------------join time: {time.time() - start_clk}------------------") # TODO delete
 
         if touch_indicator and (application.running_app is not None):  # indicate the touches on the out img (black circle)
             idx = application.running_app.touchscreen.click_location
@@ -98,12 +93,11 @@ class TableMap:
         im_r_lst[0] = im_r
 
     def update_whole_map(self, application):
-        """ calls a thread that updates the whole map by screen shooting the relevant application"""
         whole_map_thread = threading.Thread(target=self.screenshot_thread, args=(application,))
         whole_map_thread.start()
 
     def screenshot_thread(self, application):
-        self.whole_map[:self.map_shape[0], :self.map_shape[1]] = application.get_whole_map() #* 0 + 100# TODO delete * 0 + 100!
+        self.whole_map[:self.map_shape[0], :self.map_shape[1]] = application.get_whole_map()
 
     def table_dist_map(self, corners_l, corners_r, former_dist_map=None, show=False, check_err=True,  get_plane=False):
         t_seg_l = np.zeros(self.img_shape[:2])
@@ -114,29 +108,7 @@ class TableMap:
             cv2.imshow("both segmentations", np.concatenate((t_seg_l, t_seg_r), axis=1))
         corners_distances = np.matrix(calc_distance(corners_l[:, 0], corners_r[:, 0], t_seg_l.shape[0])).T
 
-        """
-        a1, b1, a2, b2 = get_table_sizes(corners_l, np.array(corners_distances)[:, 0], self.img_shape)
-        print(f"a1 = {a1:.2f}, a2 = {a2:.2f}, b1 = {b1:.2f}, b2 = {b2:.2f}")
-        if check_err:
-            diff_a = abs(a1 - a2)
 
-            if abs(a1 - a2) < 10 or abs(b1 - b2) < 10:
-                a = 6
-            # measures if the distances are reasonable distances to 4 corners of a rectangle table
-            mini = corners_distances.min()  # closest corner (in cm)
-            maxi = corners_distances.max()  # farets corner (in cm)
-            diff = maxi - mini  # differance between them (in cm)
-            # print(f"diff: {maxi - mini:.2f},  min: {mini:.2f}, max: {maxi:.2f}")
-            self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
-            if (diff > 200) or (maxi > 600) or (mini < 20):  # TODO is good parameter??
-                self.bad_corners_distances_lst[self.bad_corners_idx] = 1
-                if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
-                    return former_dist_map, False
-                return former_dist_map, True
-            # the distances make sense
-            self.bad_corners_distances_lst[self.bad_corners_idx] = 0
-            # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
-        """
 
         if check_err:
             # measures if the distances are reasonable distances to 4 corners of a rectangle table
@@ -145,7 +117,7 @@ class TableMap:
             diff = maxi - mini  # differance between them (in cm)
             # print(f"diff: {maxi - mini:.2f},  min: {mini:.2f}, max: {maxi:.2f}")
             self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
-            if (diff > 200) or (maxi > 600) or (mini < 20):  # TODO is good parameter??
+            if (diff > 200) or (maxi > 600) or (mini < 20):
                 self.bad_corners_distances_lst[self.bad_corners_idx] = 1
                 if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
                     return former_dist_map, False
@@ -154,28 +126,6 @@ class TableMap:
             self.bad_corners_distances_lst[self.bad_corners_idx] = 0
             # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
 
-        # if check_err:
-        #     # measures if the distances are reasonable distances to 4 corners of a rectangle table
-        #     n, m = 1, 1 #self.map_shape[1], self.map_shape[0]  # TODO uncomment
-        #     a, b, d, c = np.array(corners_distances)[:, 0]
-        #     a_squared = a ** 2
-        #     x = (a_squared - b ** 2 + n ** 2) / (2 * n)
-        #     y = (a_squared - c ** 2 + m ** 2) / (2 * m)
-        #     z_squared = a_squared - x ** 2 - y ** 2
-        #     err = abs((x - n) ** 2 + (y - m) ** 2 + z_squared - d ** 2) ** 0.5
-        #     self.bad_corners_idx = (self.bad_corners_idx + 1) % len(self.bad_corners_distances_lst)
-        #     # print(f"invalid mean: {self.bad_corners_distances_lst}")
-        #     if err > 30:  # TODO is good parameter??
-        #         # err needs to be less than around 25 or more
-        #         self.bad_corners_distances_lst[self.bad_corners_idx] = 1
-        #         if np.mean(self.bad_corners_distances_lst) > self.bad_corners_thresh:
-        #             return former_dist_map, False
-        #         return former_dist_map, True
-        #     # the distances make sense
-        #     self.bad_corners_distances_lst[self.bad_corners_idx] = 0
-        #     # print(f"invalid mean: {np.mean(self.bad_corners_distances_lst)}")
-
-            # print(err)
 
         A = np.matrix(np.c_[corners_l, np.ones(4)])
         plan = (A.T * A).I * A.T * corners_distances  # get the plan equation (solve pseudo inverse
@@ -185,18 +135,7 @@ class TableMap:
             return dist_map_t
         dist_map_t = dist_map_t * (t_seg_l != 0)  # cut the plane in the segmentation size
 
-        # update the table corners
-        # if former_dist_map is not None:
-        #     # check for errors in the distance map due to poor corners following
-        #     d = ((np.array(corners_distances) - self.corners_distances)**2).sum() ** 0.5
-        #     if d > 10:
-        #         print(d)
-        #         self.corners_distances = np.array(corners_distances)
-        #         return former_dist_map, False
-        #
-        # self.corners_distances = np.array(corners_distances)
 
-        # update the corners (if check_err is on and there us no error or if check_err is off)
         self.corners_r = corners_r
         self.corners_l = corners_l
         if check_err:
@@ -206,9 +145,13 @@ class TableMap:
 
 
 def get_table_corners(image, name="", scale=1, show=False, last_seg=np.array([[None]]), jaccard_tolerance=0.7):
-    # TODO doc
-    # TODO jaccard_tolerance is good???
-    # lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    """
+    :param image: left image
+    :param scale: resize image param
+    :param show: TRUE to show image
+    :param last_seg: last  table seg image
+    :return: seg image, corners coordinates
+    """
     if scale != 1:
         scaled = cv2.resize(image, (image.shape[1] * scale, image.shape[0] * scale), interpolation=cv2.INTER_AREA)
     else:
@@ -258,23 +201,6 @@ def get_table_corners(image, name="", scale=1, show=False, last_seg=np.array([[N
 
     seg_mask = getLargestCC(edges_thr)  # find largest compponent
     seg_mask = ConvexHullFill(seg_mask).astype('uint8')  # fill it
-
-
-    #--------show images--------
-    # cv2.imshow('edges', edges_thr)
-    # cv2.imshow('seg_mask', seg_mask)
-    # cv2.waitKey()
-    # cv2.imwrite("test.jpg", seg_mask)
-    # test = cv2.imread("test.jpg")
-
-    # ------- good segmentation control -----
-    if last_seg[0, 0] is not None:  # if there is a segmentation from the former frame
-        # --- if the new segmentation is not close enough to the old one
-        if my_jaccard_score(seg_mask, last_seg) < jaccard_tolerance:
-            seg_mask = last_seg  # use the old one instead (we assume that the older one was a good one)
-            if show:
-                print("NOTE: table corners ignored in that frame! (bad jaccard with the former segmentation)")
-
     # -------finding the corners-----
     # detect corners with the goodFeaturesToTrack function.
     corners = get_seg_corners(seg_mask, scale=scale, name=name, show=show)
@@ -283,36 +209,14 @@ def get_table_corners(image, name="", scale=1, show=False, last_seg=np.array([[N
     return corners, seg_mask
 
 
-# TODO chose between the two:
-def get_seg_corners2(seg_img, name="", scale=1, show=False):
-    # https://docs.opencv.org/4.x/d4/d8c/tutorial_py_shi_tomasi.html
-    # https://docs.opencv.org/4.x/dd/d1a/group__imgproc__feature.html#ga1d6bb77486c8f92d79c8793ad995d541
-
-    # blur so no corners will be detected because of pixel resolution
-    seg_img = cv2.GaussianBlur(seg_img, (5, 5), cv2.BORDER_DEFAULT)
-
-    # the distance between the corners is at least 10% of the maximal possible distance
-    minDistance = 10 * np.sqrt(seg_img.shape[0]**2 + seg_img.shape[1]**2)//100
-    corners = cv2.goodFeaturesToTrack(seg_img, maxCorners=4, qualityLevel=0.001,
-                                      minDistance=minDistance)  # TODO check parameters
-    corners = list((corners / scale).astype('int')[:, 0, :])
-    center = (sum([p[0] for p in corners]) / len(corners), sum([p[1] for p in corners]) / len(corners))
-    corners.sort(key=lambda p: math.atan2(p[1] - center[1], p[0] - center[0]))  # sort by polar angle
-    corners = np.array(corners)
-    if show:
-        # make it 3 channels
-        img = np.concatenate([seg_img[:, :, np.newaxis], seg_img[:, :, np.newaxis], seg_img[:, :, np.newaxis]], 2)
-        resized_seg_img = cv2.resize(img, (int(img.shape[1] / scale), int(img.shape[0] / scale)),
-                                     interpolation=cv2.INTER_AREA)
-        for point in corners:
-            x, y = point
-            cv2.circle(resized_seg_img, (x, y), resized_seg_img.shape[0]//80, 255, -1)
-        cv2.imshow(name, resized_seg_img)
-    return corners
-
-
-# TODO chose between the two:
 def get_seg_corners(seg_img, name="", scale=1, show=False):
+    """
+
+    :param seg_img: table binary image
+    :param scale: resize image param
+    :param show: TRUE to show image
+    :return: corners coordinates
+    """
     # make it 3 channels and resize for better resolution
     seg_img = np.concatenate([seg_img[:, :, np.newaxis], seg_img[:, :, np.newaxis], seg_img[:, :, np.newaxis]], 2).astype('uint8')
 
@@ -326,11 +230,6 @@ def get_seg_corners(seg_img, name="", scale=1, show=False):
     center = (sum([p[0] for p in corners]) / len(corners), sum([p[1] for p in corners]) / len(corners))
     corners.sort(key=lambda p: math.atan2(p[1] - center[1], p[0] - center[0]))  # sort by polar angle
     corners = np.array(corners)
-    # for i in range(4):  # put the corners a bit closer inside the table - not on the edges
-    #     diff = np.array(center) - corners[i]
-    #     direction = diff/np.linalg.norm(diff)
-    #     dist = (diff ** 2).sum() ** 0.5
-    #     corners[i] = corners[i] + direction * dist * 0.008
     corners = (corners/scale).round().astype('int')
     if show:
         resized_seg_img = cv2.resize(seg_img, (int(seg_img.shape[1] / scale), int(seg_img.shape[0] / scale)),
@@ -344,23 +243,8 @@ def get_seg_corners(seg_img, name="", scale=1, show=False):
 
 
 def create_table_map(corners_l, corners_r, im_shape, map_dense=2):
-    # TODO doc
-
-    # map_dense = 2  # the dense of the map (when transforming from the map we dont want blank spots)
-    # TODO change map dence for better performances
-
-    # scale_factor = 10
-    # t_distances = calc_distance(corners_l[:, 0], corners_r[:, 0], im_shape[0])
-    # a1, b1, a2, b2 = get_table_sizes(corners_l, t_distances, im_shape)
-    # print(f"a1 = {a1:.2f}, a2 = {a2:.2f}, b1 = {b1:.2f}, b2 = {b2:.2f}")
-    #
-    # table_shape_x = (((a1 + a2)/2) * scale_factor * map_dense).round().astype('int')
-    # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
-    # table_shape_x = (((a1 + a2)/2) * scale_factor * map_dense).round().astype('int')
-    # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
     table_shape_x = np.max([300, 200])
     table_shape_y = np.min([300, 200])
-    # TODO delete line when ready
     return np.zeros([table_shape_y, table_shape_x, 3], dtype="uint8")
 
 
@@ -420,7 +304,7 @@ class CornersFollower:
                               maxLevel=6,
                               criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
-        self.renew_hough_time = 1  # renews the lines with the segmentation every renew_seg_time  # TODO change number
+        self.renew_hough_time = 1  # renews the lines with the segmentation every renew_seg_time
         self.renew_hough_cnt = 0
 
     def corners2lines(self, mask=None):
@@ -440,14 +324,13 @@ class CornersFollower:
 
         size = 40
         edges = cv2.Canny(self.next_frame, 400, 500, apertureSize=3)
-        # TODO find the closest points from the followed lined to the edges lines ???
-        side_edges = []  # TODO do with self so the space is saved
+        side_edges = []
         for i, (p1, p2) in enumerate(zip(new_table_corners, np.roll(new_table_corners, shift=1, axis=0))):
 
             edges_line = cv2.line(self.zero_img.copy(), tuple(p1), tuple(p2), 255, size) * edges
             if mask is not None:
                 edges_line = edges_line * (mask == 0)
-            side_edges.append(edges_line.copy())  # TODO side_edges[i] = edges_line
+            side_edges.append(edges_line.copy())
 
         # new_table_corners = self.get_corners_with_lin_reg(points=tmp_lines)
         self.renew_hough_cnt += 1
@@ -467,7 +350,6 @@ class CornersFollower:
 
     def reasonable_change(self, new_table_corners):
         """ return true if the changes in the corners were reasonable"""
-        # TODO play with parameters
         all_diff_thresh = 100  # bigger = loser  (used 9)
         diff_3_thresh = 0
         pairs_diff_thresh = 50  # bigger = loser  (used 3)
@@ -499,15 +381,6 @@ class CornersFollower:
         reasonable = diff3_2 and diff2_1 and diff1_0 and minimum_corners_changed
         # reasonable = minimum_corners_changed
 
-
-        #  TODO delete prints
-        # if reasonable:
-        #     # print("")
-        #     a = 2
-        # else:
-        #     print("no changed:")
-        # print(f"distances: {distances}")
-        # print(f"differences: {distances[3] - distances[0]}\n")
         return reasonable
 
     def follow(self, next_frame, mask, show=False, show_out=False):
@@ -557,21 +430,7 @@ class CornersFollower:
 
 
 if __name__ == "__main__":
-    # TODO relevant parameters
-    #  err_tolerance
-    #  all_diff_thresh = 20  # bigger = loser
-    #  diff_3_thresh = 0
-    #  pairs_diff_thresh = 4  # bigger = loser
-    #  reasonable_change() function
-    #  . IS reasonable_change() function needed?????
-    #  maybe think about parameter that involves the former distance map?
-    #  maybe parameter that measure the transform estimation?
-    #  lk_params??
-    #  .
-    #  . TODO problem with video 4 right with following
-    #  TODO: additional tracking with matching descriptors?? - corners
-    #  TODO: may be add sign for resetting the table segmentation for the user
-    #  TODO: the dont use segmentation to renew only if a hand is blocking the corners area???
+
     import os
     from hands_handling import hands_matches_points
 
@@ -683,9 +542,6 @@ if __name__ == "__main__":
         if not changed:
             print("not changed")
 
-        # table_frame = table_frame_mask(corner_follower.current_corners, im_l) * ((255 - mask_l.astype('int') > 0))
-        # src_points, dst_points = hands_matches_points(table_frame, old[1], im_l, old[0], threshold=10, num_matches=20, nfeatures=6000,
-        #                          show_matches=False, show_kp=False)
 
         key = cv2.waitKey(100)
         if key == 27:
