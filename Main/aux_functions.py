@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 
 
 def get_corners_with_lin_reg(points):
+    """
+    extracts 4 corners from set of rectangle points using linear regression
+    :param points: rectangle points
+    :return: 4 corners of the rectangle
+    """
     tmp_lines = points
     outliers_thresh = 1
     new_table_corners = np.zeros((4, 2), dtype=np.int)
@@ -48,12 +53,14 @@ def get_corners_with_lin_reg(points):
 
 
 def get_corners_with_hough(side_edges):
-    # TODO doc
-    # TODO add inputs, and optimize thresholds and function parameters
+    """
+    extracts 4 corners from set of rectangle points using linear hough lines for each edge
+    :param points: 4 edges maps
+    :return: 4 corners of the rectangle (lines intersection)
+    """
     hough_rho = 1
     hough_theta = (np.pi / 180) * 1
     hough_thresh = 50
-    # TODO maby change the points?? + 1000??
 
     lines = np.zeros((4, 2))
     corners = np.zeros((4, 2))
@@ -91,6 +98,7 @@ def get_corners_with_hough(side_edges):
 
 
 def projective_points_tform(tform_mat, points, inverse=False):
+    """ projective transform for points using tha matrix """
     if inverse:
         tform_mat = np.linalg.inv(tform_mat)
     homogeneous = np.c_[points, np.ones(len(points))]     # create homogeneous coordinates
@@ -127,24 +135,22 @@ def ConvexHullFill(segmentation):
 
 
 def getLargestCC(segmentation):
+    """ get the largest connected componnent """
     labels = label(segmentation)
-    assert(labels.max() != 0)  # assume at least 1 CC  TODO use try maybe???
+    assert(labels.max() != 0)  # assume at least 1 CC
     largestCC = labels == np.argmax(np.bincount(labels.flat)[1:])+1
     return largestCC
 
 
-# TODO not in use//?
-def getCC_labels_by_size(segmentation):
-    labels = label(segmentation)
-    assert(labels.max() != 0)  # assume at least 1 CC   TODO use try may be???
-    bincount_lst = list(enumerate(np.bincount(labels.flat)))[1:]  # list of the count
-    bincount_lst = np.array(sorted(bincount_lst, key=lambda item: -item[1]))  # sort by the number of pixels per each label
-    labels_by_size = bincount_lst[:, 0]
-    bincount_by_size = bincount_lst[:, 1]
-    return labels_by_size, bincount_by_size, labels
-
-
 def calc_distance(x_left, x_right, width):
+    """
+    calculates the distances between the camera and the object using disparity between
+    the location in the left and right image
+    :param x_left: pixel location of an object in the left image
+    :param x_right: pixel location of the same object in the right image
+    :param width: width of the image
+    :return:
+    """
     mid_left = width//2
     mid_right = width//2
     # ------- camera parameters----------
@@ -172,6 +178,7 @@ def my_jaccard_score(seg_map1, seg_map2):
 
 
 def measure_transformation(mask_src, mask_dest, tform_mat, name="", show=False):
+    """    measures how good is the transformation using jaccard score    """
     tformed_src = cv2.warpPerspective(mask_src, tform_mat, (mask_dest.shape[1], mask_dest.shape[0]))
     jaccard = my_jaccard_score(tformed_src, mask_dest)
 
@@ -213,37 +220,8 @@ def touching_indexes(table_d_map, hands_d_map, tolerance=2, show=False):
     return touch_idxs
 
 
-class ImageDistorter:
-    def __init__(self, src):
-        width = src.shape[1]
-        height = src.shape[0]
-        distCoeff = np.zeros((4, 1), np.float64)
-        # TODO: add your coefficients here!
-        k1 = 1.0e-4  # negative to remove barrel distortion
-        k2 = 0.0
-        p1 = 0.0
-        p2 = 0.0
-        distCoeff[0, 0] = k1
-        distCoeff[1, 0] = k2
-        distCoeff[2, 0] = p1
-        distCoeff[3, 0] = p2
-        # assume unit matrix for camera
-        cam = np.eye(3, dtype=np.float32)
-        cam[0, 2] = width / 2.0  # define center x
-        cam[1, 2] = height / 2.0  # define center y
-        cam[0, 0] = 10.  # define focal length x
-        cam[1, 1] = 10.  # define focal length y
-
-        self.distCoeff = distCoeff
-        self.cam = cam
-
-    def distort_and_concat(self, im_l, im_r):
-        dst_l = cv2.undistort(im_l, self.cam, self.distCoeff)
-        dst_r = cv2.undistort(im_r, self.cam, self.distCoeff)
-        return np.concatenate([dst_l, dst_r], axis=1)
-
-
 class CountDown:
+    """ class that countdown seconds    """
     def __init__(self):
         self.counter = 0
         self.start_time = 0

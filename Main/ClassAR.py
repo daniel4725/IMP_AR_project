@@ -42,7 +42,6 @@ class AR:
         self.renew_seg_counter = 3
         self.re_corners_r, re_seg_img_r = 0, 0
 
-        # TODO get from where??
         self.im_l = None
         self.im_r = None
         self.mask_l = None
@@ -53,7 +52,6 @@ class AR:
 
     def get_hand_r_seg(self):
         self.mask_r = self.hand_operations.get_hand_mask(self.im_r)
-        # TODO change to mask_r
 
     def get_sleeve_r_seg(self):
         self.sleeve_r = self.hand_operations.get_hand_mask(self.im_r, get_sleeve=True)
@@ -62,7 +60,7 @@ class AR:
         self.sleeve_l = self.hand_operations.get_hand_mask(self.im_l, get_sleeve=True)
 
     def renew_seg_right(self, scale):
-        self.re_corners_r, self.re_seg_img_r = get_table_corners(self.im_r, scale=scale)  # TODO scale?
+        self.re_corners_r, self.re_seg_img_r = get_table_corners(self.im_r, scale=scale)
 
     def hands_distance_calc(self):
         # find matches hands points
@@ -101,7 +99,7 @@ class AR:
             self.renew_seg_countdown_clk.start_countdown(self.renew_seg_counter)
 
         if self.renew_seg_countdown_clk.check() == 0:
-            scale = 2  # TODO scale?
+            scale = 2
             renew_seg_r = threading.Thread(target=self.renew_seg_right, args=(scale,))
             renew_seg_r.start()
             re_corners_l, re_seg_img_l = get_table_corners(self.im_l, scale=scale, name="renew_l", show=True)
@@ -126,8 +124,6 @@ class AR:
         self.table_map.update_whole_map(application=self.application)
 
         # get the segmentation maps of the hands
-        # TODO ------------------------ here:  -------------------------------
-        #  using im_l and im_r extracting mask_l and mask_r
         hand_seg_r_thread = threading.Thread(target=self.get_hand_r_seg)
         sleeve_seg_l_thread = threading.Thread(target=self.get_sleeve_l_seg)
         sleeve_seg_r_thread = threading.Thread(target=self.get_sleeve_r_seg)
@@ -141,9 +137,9 @@ class AR:
         cv2.imshow("hands", np.concatenate([self.mask_l, self.mask_r], axis=1))
         cv2.imshow("sleeves", np.concatenate([self.sleeve_l, self.sleeve_r], axis=1))
         if self.use_sleeves:
-            self.cover_l, self.cover_r = self.mask_l + self.sleeve_l, self.mask_r + self.sleeve_r  # TODO sleeve on top??
+            self.cover_l, self.cover_r = self.mask_l + self.sleeve_l, self.mask_r + self.sleeve_r
         else:
-            self.cover_l, self.cover_r = self.mask_l, self.mask_r  # TODO sleeve on top??
+            self.cover_l, self.cover_r = self.mask_l, self.mask_r
 
         # ---------------------- state machine and distances map (hands and table) calculations --------------------
         # starts the hands and the table distance map calculations
@@ -151,25 +147,17 @@ class AR:
         table_thread = threading.Thread(target=self.table_distance_calc)
         table_thread.start()
         hands_thread.start()
-        # TODO ------------------------ here:  -------------------------------
-        #  calculate the state according to former one and calculate thing that are in the stage
-        #  4. change state accordingly, update the the relevant app (in tablemap
-        #  and other relevant objects)
         self.renew_table_segmentation = self.state_machine.state_operations(self.im_l, self.mask_l, application=self.application)
 
         table_thread.join()
         hands_thread.join()
 
-        # TODO ------------------------ here:  -------------------------------
-        #  do stuff according to each state
-
-        # TODO 1.
         # ------------------  compare both distances map to find the touching indexes --------------------
         tip_map = self.hand_operations.get_tip_mask(self.mask_l)
         cv2.imshow('tip', tip_map * 255)
         if self.state_machine.state in self.state_machine.ACTIVE_STATES:
             tip_map = self.hand_operations.get_tip_mask(self.mask_l)
-            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands * tip_map, tolerance=4, show=False)  # TODO: tolerance
+            touch_idxs = touching_indexes(self.dist_map_table, self.dist_map_hands * tip_map, tolerance=4, show=False)
         else:
             touch_idxs = np.zeros((0, 2))  # no touches
 
