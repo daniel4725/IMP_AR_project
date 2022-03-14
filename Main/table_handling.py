@@ -8,8 +8,9 @@ import threading
 
 # ---------------   TABLE map -----------------
 class TableMap:
+    """ object that holds the table corners, creates a table distances map and project the
+    relevant application screen into the table plane """
     def __init__(self, corners_l, corners_r, shape, map_dense=2):
-
         self.corners_l = corners_l
         self.corners_r = corners_r
         self.bad_corners_distances_lst = np.zeros(20)
@@ -24,24 +25,9 @@ class TableMap:
         self.map_shape = self.map.shape
         self.map_points = np.array([[0, 0], [t_map.shape[1], 0], [t_map.shape[1], t_map.shape[0]], [0, t_map.shape[0]]])
 
-    def get_length(self, corner1, corner2, dist_map):
-        x1, y1 = corner1
-        x2, y2 = corner2
-        dx = np.max([x1, x2]) - np.min([x1, x2])
-        dy = np.max([y1, y2]) - np.min([y1, y2])
-        x3 = np.min([x1, x2])
-        y3 = np.min([y1, y2])
-        z1 = dist_map[y1, x1]
-        z2 = dist_map[y2, x2]
-        z3 = dist_map[y3, x3]
-        angle_x = dx / (640 / 87)
-        angle_y = dy / (320 / 56)
-        dx_sqr = z3**2 + z2**2 - 2 * z2 * z3 * np.cos(angle_x)
-        dy_sqr = z3**2 + z1**2 - 2 * z1 * z3 * np.cos(angle_y)
-        return (dx_sqr + dy_sqr) ** 0.5
-
     def project_map2real(self, im_l, im_r, mask_l, mask_r, application, real_touch_idxs=np.zeros((0, 2)),
                          touch_indicator=False, show_touch=False):
+        """ projects the application screen into both left and right images tables """
         im_r_lst = [im_r]
         project_map_2_im_r = threading.Thread(target=self.project2right_img_thread, args=(im_r_lst, mask_r))
         project_map_2_im_r.start()  # thread for transforming the right image the right image
@@ -83,6 +69,7 @@ class TableMap:
         return im_l, im_r
 
     def project2right_img_thread(self, im_r_lst, mask_r, use_tablet=False):
+        """ thrad that projects the map to the right image """
         # im_r_lst is a list that has one index, in it the im_r. it is a list so it will be mutable
         im_r = im_r_lst[0]
         tform_mat_r, _ = cv2.findHomography(self.corners_r, self.map_points)
@@ -93,13 +80,17 @@ class TableMap:
         im_r_lst[0] = im_r
 
     def update_whole_map(self, application):
+        """ updates the map via the relevant application - opening a thread"""
         whole_map_thread = threading.Thread(target=self.screenshot_thread, args=(application,))
         whole_map_thread.start()
 
     def screenshot_thread(self, application):
+        """ updates the map via the relevant application"""
         self.whole_map[:self.map_shape[0], :self.map_shape[1]] = application.get_whole_map()
 
     def table_dist_map(self, corners_l, corners_r, former_dist_map=None, show=False, check_err=True,  get_plane=False):
+        """ creates a distance map for the table using the 4 corners in each image (left and right)
+            calculates the plane equation with pseudo inverse and cuts it in the 4 corners shape  """
         t_seg_l = np.zeros(self.img_shape[:2])
         t_seg_l = cv2.fillPoly(t_seg_l, [corners_l], 255)  # creates a seg map from the corners
         if show:
@@ -279,6 +270,7 @@ def get_table_sizes(corners, distances, shape, x_opening=87, y_opening=56):
 
 
 class CornersFollower:
+    """ object that designed to follow 4 table corners """
     def __init__(self, first_frame, err_tolerance=10, static_cam=False, show=False, name="follower"):
         self.static_cam = static_cam
         self.name = name
@@ -350,40 +342,24 @@ class CornersFollower:
 
     def reasonable_change(self, new_table_corners):
         """ return true if the changes in the corners were reasonable"""
-        all_diff_thresh = 100  # bigger = loser  (used 9)
-        diff_3_thresh = 0
         pairs_diff_thresh = 50  # bigger = loser  (used 3)
-        max_moved_thresh = 100
-        # ------------------
-
 
         distances = np.sort(((self.current_corners - new_table_corners) ** 2).sum(1) ** 0.5)
-        # the differences 3 distances and the biggest/smallest one is bounded
-        # diff3smallest = distances[2] - distances[0]
-        # diff3largest = distances[3] - distances[1]
-        # diff_3_from_1 = diff3smallest < (distances[3] - distances[1] - diff_3_thresh)
-        # diff_3_from_1 = diff_3_from_1 and (diff3largest < (distances[1] - distances[0] - diff_3_thresh))
 
         diff3_2 = distances[3] - distances[2] <= pairs_diff_thresh
         diff2_1 = distances[2] - distances[1] <= pairs_diff_thresh
         diff1_0 = distances[1] - distances[0] <= pairs_diff_thresh
 
-        # the maximum change is max_moved_thresh
-        max_movement = distances[3] <= max_moved_thresh
-
         # there must be at least 2 corner changes
         minimum_corners_changed = (distances > 0).sum() >= 2
 
-        # the differences between the biggest and the smallest change is bounded
-        differences_between_changes = (distances[3] - distances[0]) < all_diff_thresh
-
         # reasonable = minimum_corners_changed and differences_between_changes
         reasonable = diff3_2 and diff2_1 and diff1_0 and minimum_corners_changed
-        # reasonable = minimum_corners_changed
 
         return reasonable
 
     def follow(self, next_frame, mask, show=False, show_out=False):
+        """ following the 4 corners of the table to the next frame"""
         if self.static_cam:
             changed = False
             return self.current_corners, changed

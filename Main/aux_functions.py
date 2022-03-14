@@ -21,7 +21,7 @@ def get_corners_with_lin_reg(points):
 
     points_lst = []
     for i, line in enumerate(tmp_lines):
-        z_score = np.abs(stats.zscore(line))  # dropping outliers  # TODO what the function does?? (the z score)
+        z_score = np.abs(stats.zscore(line))  # dropping outliers  
         no_outliers = line[(z_score < outliers_thresh).all(axis=1), :]
         # print(f"{len(no_outliers)/line.shape[0]}")
         # if len(no_outliers)/line.shape[0] < 0.40:  # if there are a lot of outliers takes the former corners
