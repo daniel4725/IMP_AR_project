@@ -24,7 +24,7 @@ class Calibration:
         self.video_operations = video_operations
         self.roi = None
         self.GMM_Model = None
-        self.components_number = 3
+        self.components_number = 4
         self.hand_contour = None
         self.image_shape = None 
         self.capture_state = 0
@@ -35,6 +35,7 @@ class Calibration:
         self.capture_image = None
         self.gmm_result_figure = None
         self.data = None
+        self.color_space = cv2.COLOR_BGR2LAB
         self.label_to_color = {
             0: self.__color_to_vec("black"),
             1: self.__color_to_vec("tab:purple"),
@@ -115,7 +116,7 @@ class Calibration:
             return image
         elif state == self.calibration_state_names["capture_hands"]:
             image = self.capture_hand(image, True, self.stereo)
-            image[:, :image.shape[1]//2] = 0
+            # image[:, image.shape[1]//2:] = 0
             return image
         elif state == self.calibration_state_names["gmm_train"]:
             self.gmm_train(self.GMM_Image, Save_model)
@@ -148,13 +149,14 @@ class Calibration:
         return image
 
     def draw_text_two_image(self, image: np.array, text: str, position: np.array):
-        left_position = (position[0] + self.offset, position[1])
+        left_position = (position[0] , position[1])
+        # left_position = (position[0] + self.offset, position[1])
         left_image = cv2.putText(self.video_operations.get_left_image(image), f'{text}', left_position, self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
         right_image = cv2.putText(self.video_operations.get_right_image(image), f'{text}', tuple(position), self.font, self.size, self.FONT_COLOR, self.thick, cv2.LINE_4)
         return self.video_operations.image_concat(left_image, right_image)
 
     def draw_contour_two_image(self, image: np.array, contour: np.array):
-        left_image = self.video_operations.get_left_image(image)
+        left_image = cv2.drawContours(self.video_operations.get_left_image(image), contour, -1, self.FONT_COLOR, self.thick)
         right_image = cv2.drawContours(self.video_operations.get_right_image(image), contour, -1, self.FONT_COLOR, self.thick)
         return self.video_operations.image_concat(left_image, right_image)
     

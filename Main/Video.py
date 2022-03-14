@@ -12,6 +12,7 @@ class Video_operations:
         self.cap_receive = None
         self.ready_to_read = True
         self.frame_queue = Queue()
+        self.pc_frame_queue = Queue()
         self.fps = None
         self.flip = False
         self.stereo = True
@@ -21,7 +22,9 @@ class Video_operations:
         self.timer_finished = False
         self.count_down = 20
         self.image_shape = (320,1280)
-    
+        self.gmm_image = np.zeros((320, 640, 3), dtype="uint8")
+        self.distance_image = np.zeros((320, 640, 3), dtype="uint8")
+
     def open_gstreamer_video_writer(self, IP: str = "192.168.0.169", IP_2: str = ''):
         self.gstreamer_writer = cv2.VideoWriter('appsrc ! videoconvert ! x264enc tune=zerolatency bitrate=4000 speed-preset=superfast ! rtph264pay ! udpsink host=' + IP + ' port=5005',cv2.CAP_GSTREAMER,0, 20, self.sending_resolution, True)
 
@@ -41,7 +44,7 @@ class Video_operations:
 
     def open_mp4_video_writer(self):
         self._fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        self.mp4_video_writer = cv2.VideoWriter("output_video.mp4", self._fourcc, 15.0, (1280, 320))
+        self.mp4_video_writer = cv2.VideoWriter("output_video.mp4", self._fourcc, 10.0, (1280, 640))
         if not self.mp4_video_writer.isOpened():
             print('VideoWriter is not opened')
             exit(0)
@@ -80,7 +83,7 @@ class Video_operations:
             print('VideoCapture not opened')
             exit(0)
             
-        self.image_shape = (self.pc_capture.read()).shape
+        # self.image_shape = (self.pc_capture.read()).shape
         
         return self.pc_capture
     
@@ -129,7 +132,7 @@ class Video_operations:
         crop_x = int((self.image_shape[1]/2) * 0.3)
         record_thread = threading.Thread(target=self.__thread_record_from_camera, args=(capture, Save_video))
         view_and_send_thread = threading.Thread(target=self.__view_thread_video_and_send_video, args=(func, crop_x , write, Save_video))
-        self.timer = 90
+        self.timer = 15
         timing_thread = threading.Thread(target=self.__timer_sec)
         record_thread.start()
         view_and_send_thread.start()
@@ -148,14 +151,18 @@ class Video_operations:
                 print('empty frame')
                 break
 
-            if Save_video is True:
-                if self.timer_finished is True:
-                    break
+            # if Save_video is True:
+            #     if self.timer_finished is True:
+            #         break
 
             if (self.ready_to_read):
                 self.ready_to_read = False
                 self.frame_queue.put(frame)
-    
+                ret2, frame2 = self.pc_capture.read()
+                # self.pc_frame_queue.put(np.zeros(frame.shape, dtype="uint8"))
+                self.pc_frame_queue.put(frame2)
+
+
     def __view_thread_video_and_send_video(self, func, crop_x: int, write: bool = True, Save_video: bool = False):
         while True:
 
@@ -177,12 +184,26 @@ class Video_operations:
             # print((time.time() - s))
             cv2.imshow("Before Reshape", frame)
 
+            try:
+                self.ar_image = self.get_left_image(frame)
+                # self.gmm_image = None
+                # self.distance_image = None
+                self.person_image = cv2.resize(self.pc_frame_queue.get(), (self.ar_image.shape[1], self.ar_image.shape[0]))
+
+                first_line_image = np.concatenate([self.ar_image, self.person_image], axis=1)
+                second_line_image = np.concatenate([self.gmm_image, self.distance_image], axis=1)
+                final_image = np.concatenate([first_line_image, second_line_image], axis=0)
+
+            except:
+                print("Fail ahushatmuta")
+
+
             self.ready_to_read = True
 
             if Save_video is True:
-                self.mp4_video_writer.write(frame)
-                if self.timer_finished is True:
-                    break
+                self.mp4_video_writer.write(final_image)
+                # if self.timer_finished is True:
+                #     break
 
             if write is True:
                 frame = self.reshspe4phone(frame)
@@ -192,12 +213,15 @@ class Video_operations:
 
             cv2.namedWindow('Video', cv2.WINDOW_KEEPRATIO)
             cv2.imshow('Video', frame)
+            cv2.imshow('test', final_image)
             # cv2.resizeWindow('Video', 1280*2, 320*2)
 
             key = cv2.waitKey(10)
             if key == ord('q'):
                 break
         cv2.destroyAllWindows()
+        self.close_mp4_video_writer()
+
       
     def save_and_preview_video_from_other_video(self, func, source: str, destination: str):
         cap = cv2.VideoCapture(source)

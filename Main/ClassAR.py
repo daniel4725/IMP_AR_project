@@ -142,7 +142,7 @@ class AR:
         # --------- bad table following for some time ----
         if (self.renew_table_segmentation or self.renewing_t_seg) and renew_table_seg:
             self.find_table()
-            return self.im_l, self.im_r
+            return self.im_l, self.im_r, self.seg_mask, self.dist_map_out
 
         # start a thread that updates the table map using screen shoot
         self.table_map.update_whole_map(application=self.application)
@@ -212,4 +212,9 @@ class AR:
             dist_map[self.dist_map_hands > 0] = self.dist_map_hands[self.dist_map_hands > 0]
             cv2.imshow('distances', dist_map.astype('uint8') * 2)
         # print(time.time() - s)
-        return im_l, im_r
+
+        self.seg_mask = np.dstack([self.mask_l, self.sleeve_l, np.zeros_like(self.sleeve_l)]).astype('uint8')
+        self.dist_map_out =  np.dstack([dist_map.astype('uint8') * 2, dist_map.astype('uint8') * 2, dist_map.astype('uint8') * 2])
+        if touch_idxs.shape[0] != 0:
+            cv2.circle(self.dist_map_out, (touch_idxs[0, 0], touch_idxs[0, 1]), 7, (0, 0, 255), -1)
+        return im_l, im_r, self.seg_mask, self.dist_map_out

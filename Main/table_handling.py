@@ -358,8 +358,8 @@ def create_table_map(corners_l, corners_r, im_shape, map_dense=2):
     # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
     # table_shape_x = (((a1 + a2)/2) * scale_factor * map_dense).round().astype('int')
     # table_shape_y = (((b1 + b2)/2) * scale_factor * map_dense).round().astype('int')
-    table_shape_x = np.max([300, 200])
-    table_shape_y = np.min([300, 200])
+    table_shape_x = np.max([500, 350])
+    table_shape_y = np.min([500, 350])
     # TODO delete line when ready
     return np.zeros([table_shape_y, table_shape_x, 3], dtype="uint8")
 
