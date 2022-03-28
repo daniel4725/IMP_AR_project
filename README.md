@@ -15,7 +15,7 @@ For an explanation of the project, there is [documentation](Documantation/AR_pdf
 
 [Medium](https://medium.com/@ophirg123/ar-project-convert-any-table-to-a-tablet-86b854eaa4df)  
 [Youtube](https://www.youtube.com/watch?v=I7b0lHkV0Ug)  
-[Linkedin](https://www.linkedin.com/posts/ophir-gruteke-computer-engineering_ar-project-convert-any-table-to-a-tablet-activity-6914206217397489664-LjjF?utm_source=linkedin_share&utm_medium=member_desktop_web)
+[Linkedin](https://www.linkedin.com/posts/ophir-gruteke-computer-engineering_ar-project-convert-any-table-to-a-tablet-activity-6914210993573105665-boj-?utm_source=linkedin_share&utm_medium=member_desktop_web)
 
 ## Hardware
 
