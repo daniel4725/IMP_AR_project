@@ -7,8 +7,6 @@ We created an AR application with a stereo camera, PC, and mobile phone that tra
 
 ![AR](Images/ar.png)
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/I7b0lHkV0Ug" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-
 ## Project Documentation
 
 For an explanation of the project, there is [documentation](Documantation/AR_pdf.pdf).
