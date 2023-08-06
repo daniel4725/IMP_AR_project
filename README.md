@@ -1,6 +1,5 @@
 # IMP_AR_project
-
-https://www.youtube.com/watch?v=I7b0lHkV0Ug&t=1s
+A YouTube demonstration link: https://www.youtube.com/watch?v=I7b0lHkV0Ug&t=1s
 
 ## Overview
 
